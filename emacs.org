@@ -1,0 +1,399 @@
+* Config
+** GUI customisation
+#+begin_src elisp
+  ;; Disable GUI menu bars
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+  ;; (desktop-save-mode 1)
+  (recentf-mode 1) ; via M-x ffap
+
+  (set-frame-font "Source Code Pro 22" nil t)
+
+  ;; Hide scroll bars
+  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
+  (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
+
+  ;; Disable splash screen and startup message
+  (setq inhibit-startup-message t) 
+  (setq initial-scratch-message nil)
+
+  ;; Open ~maximised in KDE/Plasma https://emacs.stackexchange.com/questions/77379/emacs-window-does-not-fully-maximize-on-kde-desktop
+  ;; TODO move comment to init.el
+#+end_src
+
+** Server mode
+#+begin_src elisp
+;; Always start emacs in server mode
+(// server-start)
+#+end_src
+
+;; Install use-package
+(eval-when-compile
+  (require 'use-package))
+#+end_src
+** Inherit environment from shell
+#+begin_src elisp
+;; Inherit environment from default shell
+(use-package exec-path-from-shell
+  :ensure t
+  :config
+  (exec-path-from-shell-initialize)
+  (exec-path-from-shell-copy-envs (list "GOROOT" "GOPATH")))
+#+end_src
+
+
+** Ivy
+I install Ivy, because I like the buffer switcher and the file finder. The buffer switcher is compatible with Perspective, and the file finder is nice. I install the ~counsel~ package, but don't enable ~ivy-mode~.
+#+begin_src elisp
+  ;; Ivy
+  (use-package counsel :ensure t)
+  (setq ivy-use-virtual-buffers t)
+  (setq ivy-count-format "(%d/%d) ")
+  (global-set-key (kbd "C-x b") 'persp-ivy-switch-buffer)
+  (global-set-key (kbd "C-x C-f") 'counsel-find-file)
+#+end_src
+
+** Vertico and friends
+I use Vertico, and its related packages, for most completion. Ivy is used just for buffer switching, and opening files.
+*** Vertico
+Vertico provides vertical narrowing and completion, but is pretty basic compared to Ivy.
+#+begin_src elisp
+  (use-package vertico :ensure t :init (vertico-mode))
+  (global-set-key (kbd "M-x") 'execute-extended-command) ; not really necessary, but included to explicitly unset any other keybindings.
+  ;; note, can't eval above command directly?
+#+end_src
+*** Marginalia
+Marginalia adds useful metadata to items in Vertico's completion results, e.g. descriptions of commands in ~M-x~.
+#+begin_src elisp
+(use-package marginalia :ensure t :init (marginalia-mode))
+#+end_src
+*** Consult
+Consult offers a wide range of searching commands. I just use it as a replacement for swiper, because it feels faster.
+#+begin_src elisp :results none
+(use-package consult :ensure t)
+(global-set-key (kbd "C-s") 'consult-line)
+#+end_src
+*** Orderless
+Orderless provides a completion style for Vertico that allows matches to be narrowed using space separated terms, much like Ivy does out of the box
+#+begin_src elisp
+(use-package orderless
+  :ensure t
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles basic partial-completion)))))
+#+end_src
+However, I disable orderless for Company, because I find it affects performance whilst editing buffers. The function below is taken from [[https://github.com/oantolin/orderless#company][here]].
+#+begin_src elisp
+;; We follow a suggestion by company maintainer u/hvis:
+;; https://www.reddit.com/r/emacs/comments/nichkl/comment/gz1jr3s/
+(defun company-completion-styles (capf-fn &rest args)
+  (let ((completion-styles '(basic partial-completion)))
+    (apply capf-fn args)))
+(advice-add 'company-capf :around #'company-completion-styles)
+#+end_src
+** Avy
+#+begin_src elisp :results none
+(use-package avy :ensure t)
+(global-set-key (kbd "M-a") #'avy-goto-char-timer)
+(global-set-key (kbd "M-g g") #'avy-goto-line)
+#+end_src
+** Spaceline modeline
+*** Install spaceline
+#+begin_src elisp :results none
+(use-package spaceline
+  :ensure t
+  :config
+  (require 'spaceline-config)
+  (spaceline-spacemacs-theme))
+#+end_src
+** Display line numbers
+#+begin_src elisp :results none
+(setq display-line-numbers-type t)
+(global-display-line-numbers-mode)
+#+end_src
+** Line highlighting
+#+begin_src elisp
+;; Highlight current line
+(global-hl-line-mode)
+#+end_src
+** Perspective workspaces
+#+begin_src elisp
+;; Perspective
+(use-package perspective
+  :ensure t
+  :custom
+  (setq persp-sort 'access)
+  (persp-mode-prefix-key (kbd "C-x x"))
+  :init
+  (persp-mode))
+
+;; Function to add and switch to buffer in perspective
+(defun persp-add-and-switch-buffer (buffer-or-name)
+  (interactive
+   (list
+    (let ((read-buffer-function nil))
+      (read-buffer "Add buffer to perspective: "))))
+  (persp-add-buffer buffer-or-name)
+  (switch-to-buffer buffer-or-name))
+
+;; Function to switch to a new perspective, and add the current buffer
+(defun persp-switch-and-add-buffer ()
+  (interactive)
+  (let ((buffer (buffer-name)))
+    (persp-switch ())
+    (persp-add-and-switch-buffer buffer)))
+
+;; Key bindings for replacement buffer switch, and buffer moving commands
+(define-key perspective-map (kbd "a") 'persp-add-and-switch-buffer)
+(define-key perspective-map (kbd "S") 'persp-switch-and-add-buffer)
+#+end_src
+*** Switch to workspace for a projectile project
+#+begin_src elisp
+(defun ak/persp-project-switch ()
+  (interactive)
+  (persp-switch "persp-project-switch")
+  (projectile-switch-project)
+  (persp-rename (projectile-project-name)))
+
+(define-key perspective-map (kbd "P") #'ak/persp-project-switch)
+#+end_src
+*** Rename current perspective to current project name
+#+begin_src elisp :results none
+(defun ak/rename-perspective-to-current-project ()
+  (interactive)
+  (persp-rename (projectile-project-name)))
+(define-key perspective-map (kbd "R") #'ak/rename-perspective-to-current-project)
+#+end_src
+** Window switcher
+#+begin_src elisp
+;; Numbered window switcher
+(use-package winum :ensure t)
+(winum-mode)
+#+end_src
+*** Perspective segment
+#+begin_src elisp :results none
+(setq perspective-segment (make-symbol "perspective-segment"))
+(spaceline-define-segment perspective-segment
+  "Displays the current perspective"
+  (persp-current-name))
+#+end_src
+*** Configure modeline
+#+begin_src elisp :results none
+  (// spaceline-toggle-window-number-off)                                      ; otherwise the evil state indicator isn't shown
+  (// setq spaceline-highlight-face-func 'spaceline-highlight-face-evil-state) ; colorise the modeline based on the evil state
+  (setq powerline-default-separator "arrow")
+  (setq spaceline-separator-dir-left '(left . left))
+  (setq spaceline-separator-dir-right '(right . right))
+  (spaceline-define-segment my-string "FOCUS!" "FOCUS!    ")
+
+
+
+  (spaceline-compile
+    ; left side
+    '(
+      window-number
+      ((buffer-modified buffer-id) :priority 98)
+      (major-mode :priority 79)
+      (process :when active)
+      (version-control :when active)
+      ((flycheck-error flycheck-warning flycheck-info) :when active :priority 89)
+     )
+    ; right side
+    '(
+      (perspective-segment)
+      (buffer-position)
+      (my-string)
+
+     )
+    )
+#+end_src
+** Magit
+*** Magit
+#+begin_src elisp
+(use-package magit :ensure t)
+(setq magit-diff-refine-hunk (quote all)) ; Use word diffs when showing diffs
+#+end_src
+** Auto completion with company mode
+#+begin_src elisp
+;; Auto-completion
+(use-package company :ensure t)
+(add-hook 'after-init-hook #'global-company-mode) ; Enable company mode in all buffers
+#+end_src
+** Flyspell in text mode
+#+begin_src elisp :results none
+(defun ak/text-mode-hook ()
+  (flyspell-mode))
+(add-hook 'text-mode-hook #'ak/text-mode-hook)
+#+end_src
+
+** Org mode customisation
+*** Org config and key bindings
+#+begin_src elisp :results none
+;; Org mode customisation
+(// setq org-startup-folded t) ; open org files folded, rather than expanded
+(setq org-edit-src-content-indentation 0) ; do not indent code in source blocks
+(setq org-startup-with-inline-images t) ; always show inline images
+(setq org-adapt-indentation nil) ; do not indent headline contents with headline
+(setq org-use-speed-commands t) ; use speed keys in org buffers
+(define-key org-mode-map (kbd "C-c C-s") #'org-insert-structure-template)
+(define-key org-mode-map (kbd "C-c o c") #'org-capture)
+(require 'org-agenda)
+(define-key org-agenda-mode-map (kbd "C-c o c") #'org-capture)
+(define-key org-mode-map (kbd "C-c o a") #'org-agenda)
+(setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
+(defun ak/org-mode-hook ()
+  (flyspell-mode))
+(add-hook 'org-mode-hook #'ak/org-mode-hook)
+(setq org-todo-keywords
+           '((sequence "TODO" "PROG" "|" "DONE")))
+(setq org-icalendar-store-UID t) ; export tp ical with persistent ids
+#+end_src
+*** Org babel config
+#+begin_src elisp :results none
+;; Mermaid babel support
+(use-package mermaid-mode :ensure t) ; load mermaid-mode before ob-mermaid, because ob-mermaid has a better babel function
+(use-package ob-mermaid :ensure t)
+
+;; Use python3 for python blocks
+(setq org-babel-python-command "python3")
+
+;; Org Babel languages
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((python . t)
+   (mermaid . t)
+   (shell . t)
+   (emacs-lisp . t)))
+
+(defun ak/org-babel-confirm (lang body)
+  (not (or (string= lang "elisp")
+	   (string= lang "mermaid")
+	   (string= lang "shell")
+	   (string= lang "sh")
+	   (string= lang "python")
+	   (string= lang "bash"))))
+(setq org-confirm-babel-evaluate #'ak/org-babel-confirm)
+#+end_src
+
+*** Function for copying org links
+This function was taken from [[https://emacs.stackexchange.com/questions/3981/how-to-copy-links-out-of-org-mode][StackOverflow]].
+#+begin_src elisp
+(defun farynaio/org-link-copy (&optional arg)
+  "Extract URL from org-mode link and add it to kill ring."
+  (interactive "P")
+  (let* ((link (org-element-lineage (org-element-context) '(link) t))
+          (type (org-element-property :type link))
+          (url (org-element-property :path link))
+          (url (concat type ":" url)))
+    (kill-new url)
+    (message (concat "Copied URL: " url))))
+
+(define-key org-mode-map (kbd "C-x C-l") 'farynaio/org-link-copy)
+#+end_src
+** EAF
+#+begin_src elisp :results none
+(use-package eaf
+  :load-path "~/.emacs.d/site-lisp/emacs-application-framework"
+  :custom
+  ; See https://github.com/emacs-eaf/emacs-application-framework/wiki/Customization
+  (eaf-browser-continue-where-left-off t)
+  (eaf-browser-enable-adblocker t)
+  (browse-url-browser-function 'eaf-open-browser)
+  :config
+  (defalias 'browse-web #'eaf-open-browser)
+  (// eaf-bind-key scroll_up "C-n" eaf-pdf-viewer-keybinding)
+  (// eaf-bind-key scroll_down "C-p" eaf-pdf-viewer-keybinding)
+  (// eaf-bind-key take_photo "p" eaf-camera-keybinding)
+  (// eaf-bind-key nil "M-q" eaf-browser-keybinding))
+
+#+end_src
+** Which key
+#+begin_src elisp
+(use-package which-key :ensure t)
+(which-key-mode)
+#+end_src
+** Emoji support
+*** Package for inserting emojis
+Allows emojis to easily be inserted from a completion menu.
+#+begin_src elisp :results none
+(use-package emojify :ensure t)
+(setq emojify-display-style 'unicode)
+(setq emojify-emoji-styles '(unicode))
+(global-set-key (kbd "C-c i") #'emojify-insert-emoji)
+#+end_src
+*** Emoji-enabled font
+#+begin_src elisp :results none
+(when (member "Noto Color Emoji" (font-family-list))
+  (set-fontset-font
+    t 'symbol (font-spec :family "Noto Color Emoji") nil 'prepend))
+#+end_src
+** Split and draft function
+#+begin_src elisp :results none
+(defun ak/split-and-draft-exit ()
+  (interactive)
+  (mark-whole-buffer)
+  (kill-region nil nil t)
+  (kill-buffer-and-window))
+
+(defun ak/split-and-draft-enter ()
+  (interactive)
+  (split-window)
+  (other-window 1)
+  (set-window-buffer nil (set-buffer (generate-new-buffer "ak/draft")))
+  (markdown-mode)
+  (local-set-key (kbd "C-c C-c") #'ak/split-and-draft-exit))
+
+(global-set-key (kbd "C-x D") #'ak/split-and-draft-enter)
+#+end_src
+** Enable disabled commands
+#+begin_src elisp
+(put 'narrow-to-region 'disabled nil)
+#+end_src
+** Info customisation
+#+begin_src elisp :results none
+(use-package adaptive-wrap :ensure t)
+(defun ak/info-mode-hook ()
+  (visual-line-mode)
+  (adaptive-wrap-prefix-mode)
+  (display-line-numbers-mode -1))
+(add-hook 'Info-mode-hook #'ak/info-mode-hook)
+#+end_src
+** PDF tools
+#+begin_src elisp :results none
+(when (display-graphic-p)
+  (use-package pdf-tools :ensure t)
+  (pdf-tools-install)
+  (defun ak/pdf-view-mode-hook ()
+    (display-line-numbers-mode -1)
+    (pdf-view-midnight-minor-mode))
+  (add-hook 'pdf-view-mode-hook #'ak/pdf-view-mode-hook))
+#+end_src
+** Custom global keybindings for common commands
+#+begin_src elisp :results none
+(global-set-key (kbd "C-x E") #'eww)
+(global-set-key (kbd "C-x y") #'yank-from-kill-ring)
+(global-set-key (kbd "M-j") #'join-line)
+(global-set-key (kbd "C-x V") #'visual-line-mode)
+(global-set-key (kbd "M-q") #'browse-url-at-point)
+;; [[https://google.com/][asdf]]
+#+end_src
+** Org-roam
+#+begin_src elisp
+(use-package org-roam
+  :ensure t
+  :custom
+  (org-roam-directory (file-truename "~/org-roam/"))
+  :bind (("C-c n l" . org-roam-buffer-toggle)
+         ("C-c n f" . org-roam-node-find)
+         ("C-c n g" . org-roam-graph)
+         ("C-c n i" . org-roam-node-insert)
+         ("C-c n c" . org-roam-capture)
+         ;; Dailies
+         ("C-c n j" . org-roam-dailies-capture-today))
+  :config
+  ;; If you're using a vertical completion framework, you might want a more informative completion interface
+  (setq org-roam-node-display-template (concat "${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
+  (org-roam-db-autosync-mode)
+  ;; If using org-roam-protocol
+  (require 'org-roam-protocol))
+#+end_src
