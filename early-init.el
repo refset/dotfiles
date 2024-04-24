@@ -1,4 +1,7 @@
-(setq debug-on-error t)
+(defmacro // (&rest sexp) nil)
+(// setq debug-on-error t)
+
+;; open ~maximised in KDE/Plasma https://emacs.stackexchange.com/questions/77379/emacs-window-does-not-fully-maximize-on-kde-desktop
 (setq frame-resize-pixelwise t)
 (toggle-frame-maximized)
 

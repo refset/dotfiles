@@ -1,0 +1,101 @@
+* LSP mode
+#+begin_src elisp
+(use-package lsp-mode :ensure t)
+(setq lsp-enable-file-watchers nil)
+(use-package lsp-ui :ensure t)
+(setq lsp-lens-enable nil)
+(use-package flycheck :ensure t)
+(global-flycheck-mode)
+#+end_src
+* DAP mode
+#+begin_src elisp
+(use-package dap-mode :ensure t)
+(add-hook 'dap-stopped-hook
+          (lambda (arg) (call-interactively #'dap-hydra)))
+#+end_src
+* Markdown support
+#+begin_src elisp
+;; Install markdown package
+(use-package markdown-mode :ensure t)
+(add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
+(setq markdown-fontify-code-blocks-natively t)
+
+(defun ak/markdown-mode-hook ()
+  (flyspell-mode))
+(add-hook 'markdown-mode-hook #'ak/markdown-mode-hook)
+#+end_src
+* Python support
+#+begin_src elisp :results none
+(defun ak/python-mode-hook ()
+  (setq fill-column 80)
+  (auto-fill-mode)
+  (display-fill-column-indicator-mode)
+  (lsp))
+(add-hook 'python-mode-hook #'ak/python-mode-hook)
+(use-package elpy :ensure t)
+(require 'dap-python)
+(setq dap-python-debugger 'debugpy)
+#+end_src
+** Use ~ipython~ as the python shell
+#+begin_src elisp
+(when (executable-find "ipython")
+  (setq python-shell-interpreter "ipython"))
+#+end_src
+** venv support
+#+begin_src elisp :results none
+(use-package pyvenv :ensure t)
+#+end_src
+** elpy
+#+begin_src elisp :results none
+(use-package elpy
+  :ensure t
+  :init
+  (elpy-enable))
+#+end_src
+* Yaml support
+#+begin_src elisp
+;; YAML support
+(use-package yaml-mode :ensure t)
+#+end_src
+* Clojure support
+#+begin_src elisp
+;; Clojure support
+(use-package paredit :ensure t)
+;; (use-package flycheck-clj-kondo :ensure t)
+(use-package clojure-mode :ensure t) ; :config (require 'flycheck-clj-kondo))
+(setq cider-use-overlays 'both)
+(add-hook 'clojure-mode-hook #'lsp)
+(add-hook 'clojure-mode-hook #'paredit-mode)
+(add-hook 'clojurescript-mode-hook 'lsp)
+(add-hook 'clojurec-mode-hook 'lsp)
+(use-package cider :ensure t)
+
+;; https://emacs-lsp.github.io/lsp-mode/tutorials/clojure-guide/
+(setq gc-cons-threshold (* 100 1024 1024)
+      read-process-output-max (* 1024 1024)
+      treemacs-space-between-root-nodes nil
+      company-minimum-prefix-length 1
+      ; lsp-enable-indentation nil ; uncomment to use cider indentation instead of lsp
+      ; lsp-enable-completion-at-point nil ; uncomment to use cider completion instead of lsp
+      )
+#+end_src
+* Elisp customisations
+#+begin_src elisp :results none
+(defun ak/emacs-lisp-hook ()
+  (paredit-mode)
+  (setq fill-column 80)
+  (auto-fill-mode)
+  (display-fill-column-indicator-mode))
+(add-hook 'emacs-lisp-mode-hook #'ak/emacs-lisp-hook)
+#+end_src
+* JSON support
+#+begin_src elisp
+;; Better JSON support
+(use-package json-mode :ensure t)
+#+end_src
+* Dockerfile support
+#+begin_src elisp
+;; Dockerfile mode
+(use-package dockerfile-mode :ensure t)
+(add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-mode))
+#+end_src

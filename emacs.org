@@ -1,24 +1,25 @@
 * Config
 ** GUI customisation
 #+begin_src elisp
-  ;; Disable GUI menu bars
-  (menu-bar-mode -1)
-  (tool-bar-mode -1)
-  ;; (desktop-save-mode 1)
-  (recentf-mode 1) ; via M-x ffap
+;;TODO setxkbmap -option 'ctrl:nocaps'
+;; TODO review cider and lsp config https://github.com/andreyorst/dotfiles/blob/master/.config/emacs/init.el
+;; Disable GUI menu bars
+(menu-bar-mode -1)
+(tool-bar-mode -1)
+;; (desktop-save-mode 1)
+(recentf-mode 1) ; via M-x ffap
+(setq confirm-kill-processes nil)
+(global-unset-key (kbd "C-x C-c")) ; stop accidently quitting Emacs while I'm learning!
 
-  (set-frame-font "Source Code Pro 22" nil t)
+(set-frame-font "Source Code Pro 22" nil t)
 
-  ;; Hide scroll bars
-  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
-  (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
+;; Hide scroll bars
+(add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
+(add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
 
-  ;; Disable splash screen and startup message
-  (setq inhibit-startup-message t) 
-  (setq initial-scratch-message nil)
-
-  ;; Open ~maximised in KDE/Plasma https://emacs.stackexchange.com/questions/77379/emacs-window-does-not-fully-maximize-on-kde-desktop
-  ;; TODO move comment to init.el
+;; Disable splash screen and startup message
+(setq inhibit-startup-message t) 
+(setq initial-scratch-message nil)
 #+end_src
 
 ** Server mode
@@ -41,6 +42,16 @@
   (exec-path-from-shell-copy-envs (list "GOROOT" "GOPATH")))
 #+end_src
 
+** theme-changer
+#+begin_src elisp
+(setq calendar-location-name "London, United Kingdom") 
+(setq calendar-latitude 51.48)
+(setq calendar-longitude 0.00)
+(use-package theme-changer
+  :ensure t
+;;  :load-path "~/.emacs.d/elisp/theme-changer") ?
+(change-theme 'spacemacs-light 'spacemacs-dark)
+#+end_src
 
 ** Ivy
 I install Ivy, because I like the buffer switcher and the file finder. The buffer switcher is compatible with Perspective, and the file finder is nice. I install the ~counsel~ package, but don't enable ~ivy-mode~.
@@ -396,4 +407,84 @@ Allows emojis to easily be inserted from a completion menu.
   (org-roam-db-autosync-mode)
   ;; If using org-roam-protocol
   (require 'org-roam-protocol))
+#+end_src
+** Org-Inkscape
+#+begin_src elisp
+(defvar template-svg nil
+  "Blank document for inkscape. You cannot create a file at the
+  command line, so we put this template in and open it.")
+
+(setq template-svg "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc=\"http://purl.org/dc/elements/1.1/\"
+   xmlns:cc=\"http://creativecommons.org/ns#\"
+   xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"
+   xmlns:svg=\"http://www.w3.org/2000/svg\"
+   xmlns=\"http://www.w3.org/2000/svg\"
+   xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"
+   xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"
+   width=\"744.09448819\"
+   height=\"1052.3622047\"
+   id=\"svg2\"
+   version=\"1.1\"
+   inkscape:version=\"0.92.2 (5c3e80d, 2017-08-06)\"
+   sodipodi:docname=\"some-sketch.svg\">
+  <defs
+     id=\"defs4\" />
+  <sodipodi:namedview
+     id=\"base\"
+     pagecolor=\"#ffffff\"
+     bordercolor=\"#666666\"
+     borderopacity=\"1.0\"
+     inkscape:pageopacity=\"0.0\"
+     inkscape:pageshadow=\"2\"
+     inkscape:zoom=\"0.35\"
+     inkscape:cx=\"375\"
+     inkscape:cy=\"520\"
+     inkscape:document-units=\"px\"
+     inkscape:current-layer=\"layer1\"
+     showgrid=\"false\"
+     inkscape:window-width=\"460\"
+     inkscape:window-height=\"438\"
+     inkscape:window-x=\"871\"
+     inkscape:window-y=\"33\"
+     inkscape:window-maximized=\"0\" />
+  <metadata
+     id=\"metadata7\">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about=\"\">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource=\"http://purl.org/dc/dcmitype/StillImage\" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label=\"Layer 1\"
+     inkscape:groupmode=\"layer\"
+     id=\"layer1\" />
+</svg>")
+
+
+(defun inkscape-open (path)
+  "Open the path in inkscape"
+  (interactive)
+  (unless (f-ext-p path "svg") (error "Must be an svg file."))
+  (unless (file-exists-p path)
+    (with-temp-file path
+      (insert template-svg)))
+  (shell-command (format "inkscape %s &" path)))
+
+
+(org-link-set-parameters
+ "file"
+ :follow (lambda (path)
+       (let ((actions '(("find-file" . find-file)
+                ("edit in inkscape" . inkscape-open))))
+         (funcall (cdr (assoc (completing-read "Action: " actions) actions)) path))))
+;; from https://emacs.stackexchange.com/questions/38345/open-an-external-sketch-drawing-application
 #+end_src
