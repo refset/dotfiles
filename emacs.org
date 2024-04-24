@@ -28,6 +28,7 @@
 (setq display-time-24hr-format t)
 (setq display-time-default-load-average nil)
 (setq display-time-day-and-date t)
+(setq display-time-interval 1)
 (display-time-mode)
 #+end_src
 
@@ -46,18 +47,6 @@
 (// server-start)
 #+end_src
 
-** Package manager configuration
-#+begin_src elisp
-;; Install MELPA package repository
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(package-initialize)
-
-;; Install use-package
-(eval-when-compile
-  (require 'use-package))
-#+end_src
-
 ** Inherit environment from shell
 #+begin_src elisp
 ;; Inherit environment from default shell
@@ -70,13 +59,14 @@
 
 ** theme-changer
 #+begin_src elisp
-(setq calendar-location-name "London, United Kingdom") 
-(setq calendar-latitude 51.48)
-(setq calendar-longitude 0.00)
-(use-package theme-changer
-  :ensure t
-;;  :load-path "~/.emacs.d/elisp/theme-changer") ?
-(change-theme 'spacemacs-light 'spacemacs-dark)
+    (setq calendar-location-name "London, United Kingdom") 
+    (setq calendar-latitude 51.48)
+    (setq calendar-longitude 0.00)
+    (use-package theme-changer
+      :ensure t
+      ;; :load-path "~/.emacs.d/elisp/theme-changer" ?
+      )
+    (change-theme 'spacemacs-light 'spacemacs-dark)
 #+end_src
 
 ** Ivy
@@ -201,13 +191,6 @@ However, I disable orderless for Company, because I find it affects performance 
   (persp-rename (projectile-project-name)))
 (define-key perspective-map (kbd "R") #'ak/rename-perspective-to-current-project)
 #+end_src
-** Battery indicator
-#+begin_src elisp
-;; Fancy battery indicator
-(use-package fancy-battery :ensure t)
-(add-hook 'after-init-hook #'fancy-battery-mode)
-(setq fancy-battery-show-percentage t)
-#+end_src
 ** Window switcher
 #+begin_src elisp
 ;; Numbered window switcher
@@ -226,7 +209,7 @@ However, I disable orderless for Company, because I find it affects performance 
 (setq time-segment (make-symbol "time-segment"))
 (spaceline-define-segment time-segment
   "Displays the current time"
-  (format-time-string "%a %b %e %H:%M"))
+  (format-time-string "%a %b %e %H:%M:%S"))
 (setq utc-segment (make-symbol "utc-segment"))
 (spaceline-define-segment utc-segment
   "Displays the current utc"
@@ -257,13 +240,30 @@ However, I disable orderless for Company, because I find it affects performance 
   '(
     (battery)
     (time-segment)
-    //(utc-segment)
-    (perspective-segment)
+    ;;(utc-segment)
+    ;;(perspective-segment) ;; disabling it until I'm more comfortable
     (buffer-position)
     (my-string)
 
    )
   )
+#+end_src
+** Battery indicator
+#+begin_src elisp
+;; Fancy battery indicator
+(use-package fancy-battery :ensure t)
+(add-hook 'after-init-hook #'fancy-battery-mode)
+(setq fancy-battery-show-percentage t)
+(defun spaceline--fancy-battery-mode-line ()
+  "Assemble a mode line string for Fancy Battery Mode."
+  (when fancy-battery-last-status
+    (let* ((type (cdr (assq ?L fancy-battery-last-status)))
+           (percentage (spaceline--fancy-battery-percentage))
+           (time (spaceline--fancy-battery-time)))
+      (cond
+       ((string= "on-line" type) (concat " ∞" percentage))
+       ((string= type "") " No Battery")
+       (t (concat (if (string= "AC" type) " AC" "") percentage time))))))
 #+end_src
 ** Magit
 *** Magit

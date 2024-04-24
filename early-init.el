@@ -9,6 +9,8 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
+(eval-when-compile
+  (require 'use-package))
 
   ;; Spacemacs theme
 ;; this didn't seem to work without first doing a manual package-install of spacemacs-theme
