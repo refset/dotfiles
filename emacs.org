@@ -18,8 +18,13 @@
 (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
 
 ;; Disable splash screen and startup message
-(setq inhibit-startup-message t) 
+(setq inhibit-startup-message t)
 (setq initial-scratch-message nil)
+
+(add-hook 'org-mode-hook
+      (lambda ()
+	(setq truncate-lines nil)
+        (setq word-wrap t)))
 #+end_src
 
 ** Display time configuration
@@ -59,7 +64,7 @@
 
 ** theme-changer
 #+begin_src elisp
-    (setq calendar-location-name "London, United Kingdom") 
+    (setq calendar-location-name "London, United Kingdom")
     (setq calendar-latitude 51.48)
     (setq calendar-longitude 0.00)
     (use-package theme-changer
@@ -67,6 +72,11 @@
       ;; :load-path "~/.emacs.d/elisp/theme-changer" ?
       )
     (change-theme 'spacemacs-light 'spacemacs-dark)
+#+end_src
+
+** trailing whitespace
+#+begin_src elisp
+(setq-default show-trailing-whitespace t)
 #+end_src
 
 ** Ivy
