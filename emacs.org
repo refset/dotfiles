@@ -11,7 +11,7 @@
 (setq confirm-kill-processes nil)
 (global-unset-key (kbd "C-x C-c")) ; stop accidently quitting Emacs while I'm learning!
 
-(set-frame-font "Source Code Pro 22" nil t)
+(set-frame-font "Source Code Pro 15" nil t)
 
 ;; Hide scroll bars
 (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
@@ -60,6 +60,13 @@
   :config
   (exec-path-from-shell-initialize)
   (exec-path-from-shell-copy-envs (list "GOROOT" "GOPATH")))
+#+end_src
+
+** writeroom
+#+begin_src elisp
+;; distraction free editing - central column, minimal
+(use-package writeroom-mode
+  :ensure t)
 #+end_src
 
 ** theme-changer
@@ -315,6 +322,13 @@ However, I disable orderless for Company, because I find it affects performance 
 (setq org-todo-keywords
            '((sequence "TODO" "PROG" "|" "DONE")))
 (setq org-icalendar-store-UID t) ; export tp ical with persistent ids
+(with-eval-after-load 'org-faces
+    (dolist (face '(org-document-title
+                   org-level-1
+                   org-level-2
+                   org-level-3))
+     (set-face-attribute face nil :height 1.0)))
+(setq org-ellipsis "▼")
 #+end_src
 *** Org babel config
 #+begin_src elisp :results none
@@ -457,7 +471,7 @@ Allows emojis to easily be inserted from a completion menu.
          ("C-c n i" . org-roam-node-insert)
          ("C-c n c" . org-roam-capture)
          ;; Dailies
-         ("C-c n j" . org-roam-dailies-capture-today))
+         ("C-c n j" . org-roam-dailies-goto-today))
   :config
   ;; If you're using a vertical completion framework, you might want a more informative completion interface
   (setq org-roam-node-display-template (concat "${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
@@ -544,4 +558,41 @@ Allows emojis to easily be inserted from a completion menu.
                 ("edit in inkscape" . inkscape-open))))
          (funcall (cdr (assoc (completing-read "Action: " actions) actions)) path))))
 ;; from https://emacs.stackexchange.com/questions/38345/open-an-external-sketch-drawing-application
+#+end_src
+** buffer modified timer
+#+begin_src elisp
+(defvar buffer-last-modified-time nil
+  "The last time the buffer was modified.")
+
+(defun update-buffer-last-modified-time ()
+  "Update the last modified time of the current buffer."
+  (setq buffer-last-modified-time (current-time)))
+
+(defun time-since-last-modified ()
+  "Return the time since the buffer was last modified as a string."
+  (if buffer-last-modified-time
+      (let* ((seconds-since-modified (float-time (time-subtract (current-time) buffer-last-modified-time)))
+             (minutes (floor (/ seconds-since-modified 60)))
+             (seconds (mod seconds-since-modified 60)))
+        (format "%d:%02d" minutes seconds))
+    "0:00"))
+
+(defun update-time-since-last-modified ()
+  "Update the time since last modified in the mode line."
+  (setq mode-line-buffer-identification
+        `(:eval (format "%s %s"
+                        (buffer-name)
+                        (time-since-last-modified)))))
+
+(defun monitor-buffer-modifications ()
+  "Monitor buffer modifications to update the last modified time."
+  (update-buffer-last-modified-time)
+  (update-time-since-last-modified))
+
+(add-hook 'post-command-hook 'monitor-buffer-modifications)
+
+(setq-default mode-line-buffer-identification
+              '(:eval (format "%s %s"
+                              (buffer-name)
+                              (time-since-last-modified))))
 #+end_src

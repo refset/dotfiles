@@ -14,7 +14,7 @@
  '(custom-safe-themes
    '("bbb13492a15c3258f29c21d251da1e62f1abb8bbd492386a673dcfab474186af" "7fd8b914e340283c189980cd1883dbdef67080ad1a3a9cc3df864ca53bdc89cf" default))
  '(package-selected-packages
-   '(highlight hl-anything highlight-chars fancy-battery theme-changer rainbow-delimiters rainbox-delimiters highlight-parentheses highlight-parentheses-mode flycheck-clj-kondo org-roam pdf-tools winum company magit projectile perspective spacemacs-theme spaceline avy orderless consult marginalia vertico switch-window counsel exec-path-from-shell))
+   '(writeroom-mode writeroom-room writeroom highlight hl-anything highlight-chars fancy-battery theme-changer rainbow-delimiters rainbox-delimiters highlight-parentheses highlight-parentheses-mode flycheck-clj-kondo org-roam pdf-tools winum company magit projectile perspective spacemacs-theme spaceline avy orderless consult marginalia vertico switch-window counsel exec-path-from-shell))
  '(safe-local-variable-values
    '((cider-repl-display-help-banner)
      (eval add-to-list 'cider-test-defining-forms "def-slt-test")
