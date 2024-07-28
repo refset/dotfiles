@@ -116,6 +116,7 @@ Consult offers a wide range of searching commands. I just use it as a replacemen
 #+begin_src elisp :results none
 (use-package consult :ensure t)
 (global-set-key (kbd "C-s") 'consult-line)
+(global-set-key (kbd "C-x C-c") 'consult-buffer)
 #+end_src
 *** Orderless
 Orderless provides a completion style for Vertico that allows matches to be narrowed using space separated terms, much like Ivy does out of the box
