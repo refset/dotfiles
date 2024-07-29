@@ -6,8 +6,74 @@
 ;; Disable GUI menu bars
 (menu-bar-mode -1)
 (tool-bar-mode -1)
-;; (desktop-save-mode 1)
+(savehist-mode 1)
+(add-to-list 'savehist-additional-variables 'kill-ring)
 (recentf-mode 1) ; via M-x ffap
+(setq recentf-max-saved-items 200)
+
+;; Customize desktop-save behavior
+(setq desktop-path '("~/.emacs.d/desktop/"))
+(setq desktop-dirname "~/.emacs.d/desktop/")
+(setq desktop-base-file-name "emacs-desktop")
+(setq desktop-base-lock-name "emacs-desktop.lock")
+
+;; (desktop-read)
+(desktop-save-mode 1)
+
+(defvar *my-desktop-save* nil
+  "Should I save the desktop when Emacs is shutting down?")
+
+(add-hook 'desktop-after-read-hook
+          (lambda () (setq *my-desktop-save* t)))
+
+(advice-add 'desktop-save :around
+            (lambda (fn &rest args)
+              (if (bound-and-true-p *my-desktop-save*)
+                  (apply fn args))))
+
+;; Save the desktop automatically
+(setq desktop-save 'if-exists)
+
+(setq desktop-restore-frames t)
+
+(setq savehist-additional-variables
+      '(kill-ring
+        search-ring
+        regexp-search-ring
+        extended-command-history
+        file-name-history
+        minibuffer-history
+        query-replace-history))
+
+(add-hook 'kill-emacs-hook #'(lambda () (desktop-save-in-desktop-dir)))
+
+;; Save frame configuration and other desktop options
+(setq desktop-globals-to-save
+      (append '((extended-command-history . 30)
+                (file-name-history        . 100)
+                (ido-buffer-history       . 100)
+                (ido-last-directory-list  . 100)
+                (ido-work-directory-list  . 100)
+                (ido-work-file-list       . 100)
+                (magit-read-rev-history   . 50)
+                (minibuffer-history       . 50)
+                (org-refile-history       . 50)
+                (org-tags-history         . 50)
+                (query-replace-history    . 60)
+                (regexp-search-ring       . 20)
+                (search-ring              . 20)
+                (kill-ring                . 50)
+                (shell-command-history    . 50)
+                desktop-missing-file-warning
+                tags-file-name
+                register-alist)))
+
+;; Disable desktop file warning when the file is missing
+(setq desktop-load-locked-desktop t)
+
+;; Save buffers automatically every 5 minutes
+(run-with-timer 60 (* 5 60) 'desktop-save-in-desktop-dir)
+
 (setq confirm-kill-processes nil)
 (global-unset-key (kbd "C-x C-c")) ; stop accidently quitting Emacs while I'm learning!
 
@@ -323,12 +389,13 @@ However, I disable orderless for Company, because I find it affects performance 
 (setq org-todo-keywords
            '((sequence "TODO" "PROG" "|" "DONE")))
 (setq org-icalendar-store-UID t) ; export tp ical with persistent ids
-(with-eval-after-load 'org-faces
-    (dolist (face '(org-document-title
-                   org-level-1
-                   org-level-2
-                   org-level-3))
-     (set-face-attribute face nil :height 1.0)))
+(add-hook 'org-mode-hook
+          (lambda ()
+            (dolist (face '(org-document-title
+                            org-level-1
+                            org-level-2
+                            org-level-3))
+              (set-face-attribute face nil :height 1.0))))
 (setq org-ellipsis "▼")
 #+end_src
 *** Org babel config
@@ -596,4 +663,11 @@ Allows emojis to easily be inserted from a completion menu.
               '(:eval (format "%s %s"
                               (buffer-name)
                               (time-since-last-modified))))
+#+end_src
+** browser integration
+#+begin_src elisp
+(setq browse-url-generic-program
+  (executable-find "chromium")
+  browse-url-generic-args '("--new-tab")
+  browse-url-browser-function 'browse-url-generic)
 #+end_src
