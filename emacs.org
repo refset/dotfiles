@@ -566,6 +566,8 @@ Allows emojis to easily be inserted from a completion menu.
 #+end_src
 ** buffer modified timer
 #+begin_src elisp
+;; focus timer with a 10s repeated delay, giving a grace period to notice the time when returning to the buffer, but also recording the last afk+active period combined time (i.e. how long it's been since you last started a break)
+
 (defvar buffer-last-modified-time nil
   "The last time the buffer was modified.")
 
@@ -582,17 +584,19 @@ Allows emojis to easily be inserted from a completion menu.
         (format "%d:%02d" minutes seconds))
     "0:00"))
 
-(defun update-time-since-last-modified ()
-  "Update the time since last modified in the mode line."
-  (setq mode-line-buffer-identification
-        `(:eval (format "%s %s"
-                        (buffer-name)
-                        (time-since-last-modified)))))
+(defvar timer-reset-timer nil
+  "Timer used to reset the buffer modification timer.")
+
+(defun reset-timer-after-grace-period ()
+  "Reset the buffer modification timer after a grace period."
+  (when timer-reset-timer
+    (cancel-timer timer-reset-timer))
+  (setq timer-reset-timer
+        (run-with-timer 10 nil 'update-buffer-last-modified-time)))
 
 (defun monitor-buffer-modifications ()
   "Monitor buffer modifications to update the last modified time."
-  (update-buffer-last-modified-time)
-  (update-time-since-last-modified))
+  (reset-timer-after-grace-period))
 
 (add-hook 'post-command-hook 'monitor-buffer-modifications)
 
