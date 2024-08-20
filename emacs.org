@@ -612,3 +612,10 @@ Allows emojis to easily be inserted from a completion menu.
   browse-url-generic-args '("--new-tab")
   browse-url-browser-function 'browse-url-generic)
 #+end_src
+** lang stuff
+#+begin_src elisp
+;; set js-mode indent level
+(add-hook 'js-mode-hook
+  (lambda ()
+    (setq js-indent-level 2)))
+#+end_src
