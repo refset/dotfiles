@@ -216,7 +216,7 @@ However, I disable orderless for Company, because I find it affects performance 
 #+begin_src elisp
 ;; Numbered window switcher
 (use-package winum :ensure t)
-(winum-mode)
+(winum-mode 1)
 #+end_src
 *** Perspective segment
 #+begin_src elisp :results none
@@ -334,6 +334,8 @@ However, I disable orderless for Company, because I find it affects performance 
                             org-level-3))
               (set-face-attribute face nil :height 1.0))))
 (setq org-ellipsis "▼")
+(use-package org-download :ensure t)
+(setq org-download-screenshot-method "spectacle -br -o %s")
 #+end_src
 *** Org babel config
 #+begin_src elisp :results none
@@ -457,7 +459,7 @@ Allows emojis to easily be inserted from a completion menu.
 #+end_src
 ** Custom global keybindings for common commands
 #+begin_src elisp :results none
-(global-set-key (kbd "C-x E") #'eww)
+(// global-set-key (kbd "C-x E") #'eww)
 (global-set-key (kbd "C-x y") #'yank-from-kill-ring)
 (global-set-key (kbd "M-j") #'join-line)
 (global-set-key (kbd "C-x V") #'visual-line-mode)
@@ -564,6 +566,20 @@ Allows emojis to easily be inserted from a completion menu.
          (funcall (cdr (assoc (completing-read "Action: " actions) actions)) path))))
 ;; from https://emacs.stackexchange.com/questions/38345/open-an-external-sketch-drawing-application
 #+end_src
+** run prompt.py
+#+begin_src elisp
+(defun run-prompt-with-marked-text ()
+  "Run './prompt.py \"marked text\"' in the home directory using the marked text as input, asynchronously."
+  (interactive)
+  (if (use-region-p)
+      (let* ((marked-text (buffer-substring-no-properties (region-beginning) (region-end)))
+             (command (list "bash" "-c" (format "cd ~ && ./prompt.py %S" marked-text))))
+        (apply #'start-process "script-process" "*script-output*" command)
+        (message "Script is running in the background."))
+    (message "No region selected! Please select the text to animate.")))
+
+(global-set-key (kbd "C-x c p") #'run-prompt-with-marked-text)
+#+end_src
 ** buffer modified timer
 #+begin_src elisp
 ;; focus timer with a 10s repeated delay, giving a grace period to notice the time when returning to the buffer, but also recording the last afk+active period combined time (i.e. how long it's been since you last started a break)
@@ -618,4 +634,7 @@ Allows emojis to easily be inserted from a completion menu.
 (add-hook 'js-mode-hook
   (lambda ()
     (setq js-indent-level 2)))
+
+;; cider deps.edn config
+(setq cider-clojure-cli-global-options "-R:cider-clj")
 #+end_src
