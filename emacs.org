@@ -14,7 +14,7 @@
 (setq confirm-kill-processes nil)
 (global-unset-key (kbd "C-x C-c")) ; stop accidently quitting Emacs while I'm learning!
 
-(set-frame-font "Source Code Pro 15" nil t)
+(add-to-list 'default-frame-alist '(font . "Source Code Pro 15"))
 
 ;; Hide scroll bars
 (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
@@ -51,8 +51,9 @@
 
 ** Server mode
 #+begin_src elisp
-;; Always start emacs in server mode
-(// server-start)
+(require 'server)
+(unless (server-running-p)
+  (server-start))
 #+end_src
 
 ** Inherit environment from shell
@@ -78,9 +79,7 @@
     (setq calendar-latitude 51.48)
     (setq calendar-longitude 0.00)
     (use-package theme-changer
-      :ensure t
-      ;; :load-path "~/.emacs.d/elisp/theme-changer" ?
-      )
+      :ensure t)
     (change-theme 'spacemacs-light 'spacemacs-dark)
 #+end_src
 
@@ -381,7 +380,7 @@ This function was taken from [[https://emacs.stackexchange.com/questions/3981/ho
 #+end_src
 ** EAF
 #+begin_src elisp :results none
-(use-package eaf
+(// use-package eaf
   :load-path "~/.emacs.d/site-lisp/emacs-application-framework"
   :custom
   ; See https://github.com/emacs-eaf/emacs-application-framework/wiki/Customization
@@ -485,6 +484,8 @@ Allows emojis to easily be inserted from a completion menu.
   (org-roam-db-autosync-mode)
   ;; If using org-roam-protocol
   (require 'org-roam-protocol))
+
+(add-hook 'org-roam-dailies-find-file-hook #'end-of-buffer)
 #+end_src
 ** Org-Inkscape
 #+begin_src elisp
@@ -637,4 +638,8 @@ Allows emojis to easily be inserted from a completion menu.
 
 ;; cider deps.edn config
 (setq cider-clojure-cli-global-options "-R:cider-clj")
+
+;; (modify-face whitespace-tab nil "#F92672")
+(setq whitespace-style '(face tabs))
+(whitespace-mode)
 #+end_src

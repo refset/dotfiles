@@ -16,7 +16,11 @@
  '(package-selected-packages
    '(org-download go-mode writeroom-mode writeroom-room writeroom highlight hl-anything highlight-chars fancy-battery theme-changer rainbow-delimiters rainbox-delimiters highlight-parentheses highlight-parentheses-mode flycheck-clj-kondo org-roam pdf-tools winum company magit projectile perspective spacemacs-theme spaceline avy orderless consult marginalia vertico switch-window counsel exec-path-from-shell))
  '(safe-local-variable-values
-   '((cider-clojure-cli-aliases . ":xtdb:dev")
+   '((eval define-clojure-indent
+	   (match 1)
+	   (for-all 1)
+	   (as-> 2))
+     (cider-clojure-cli-aliases . ":xtdb:dev")
      (cider-gradle-parameters . ":clojureRepl")
      (cider-preferred-build-tool . gradle)
      (cider-repl-display-help-banner)

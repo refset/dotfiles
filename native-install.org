@@ -1,0 +1,68 @@
+* Custom Emacs 30.2 Install on Arch Linux
+This Org file summarizes the steps to build and use a custom Emacs 30.2
+with native compilation, tree-sitter, xwidgets, and optional touchscreen support,
+without interfering with the system Emacs.
+
+** Install dependencies
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+sudo pacman -Sy --needed base-devel git wget libgccjit cairo harfbuzz gtk3 libx11 libxext libxft libxinerama ncurses imagemagick
+#+end_src
+
+** Download Emacs source
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+mkdir -p ~/emacs
+cd ~/emacs
+wget http://ftp.gnu.org/gnu/emacs/emacs-30.2.tar.gz
+tar xvf emacs-30.2.tar.gz
+ls -la ~/emacs/emacs-30.2
+#+end_src
+
+** Configure and compile
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+cd ~/emacs/emacs-30.2
+make distclean
+./configure \
+  --prefix=/usr/local \
+  --with-native-compilation \
+  --with-tree-sitter \
+  --with-xwidgets
+make -j$(nproc)
+#+end_src
+
+** Install
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+cd ~/emacs/emacs-30.2
+sudo make install
+#+end_src
+
+** Ensure shell uses the new Emacs
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+which emacs
+emacs --version
+#+end_src
+
+** Verify native-lisp files
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+ls /usr/local/lib/emacs/30.2/native-lisp/
+#+end_src
+
+** Optional: Clear stale native-compiled cache
+#+begin_src bash :results output verbatim :tangle emacs-install.sh
+#!/bin/bash
+rm -rf ~/.emacs.d/eln-cache
+#+end_src
+
+** Result
+- Custom Emacs installed in `/usr/local/bin/emacs`
+- System Emacs in `/usr/bin/emacs` remains untouched
+- Native compilation works
+- Touchscreen / xwidgets / tree-sitter features available
+
