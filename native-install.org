@@ -6,7 +6,7 @@ without interfering with the system Emacs.
 ** Install dependencies
 #+begin_src bash :results output verbatim :tangle emacs-install.sh
 #!/bin/bash
-sudo pacman -Sy --needed base-devel git wget libgccjit cairo harfbuzz gtk3 libx11 libxext libxft libxinerama ncurses imagemagick
+sudo pacman -Sy --needed base-devel git wget libgccjit cairo harfbuzz gtk3 libx11 libxext libxft libxinerama ncurses imagemagick wayland wayland-protocols libxkbcommon pango
 #+end_src
 
 ** Download Emacs source
@@ -28,7 +28,7 @@ make distclean
   --prefix=/usr/local \
   --with-native-compilation \
   --with-tree-sitter \
-  --with-xwidgets
+  --with-pgtk
 make -j$(nproc)
 #+end_src
 
@@ -64,5 +64,17 @@ rm -rf ~/.emacs.d/eln-cache
 - Custom Emacs installed in `/usr/local/bin/emacs`
 - System Emacs in `/usr/bin/emacs` remains untouched
 - Native compilation works
-- Touchscreen / xwidgets / tree-sitter features available
+- Touchscreen / PGTK / tree-sitter features available
+
+** Symlink systemd service and desktop file
+The source of truth for these files lives in this repo. Symlink them to the expected locations:
+#+begin_src bash :results output verbatim
+# Systemd user service (for emacs daemon)
+ln -sf ~/.emacs.d/emacs.service ~/.config/systemd/user/emacs.service
+systemctl --user daemon-reload
+systemctl --user enable emacs
+
+# KDE/Freedesktop application launcher
+ln -sf ~/.emacs.d/emacsclient.desktop ~/.local/share/applications/emacsclient.desktop
+#+end_src
 

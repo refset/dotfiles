@@ -16,9 +16,16 @@
 
 (add-to-list 'default-frame-alist '(font . "Source Code Pro 15"))
 
-;; Hide scroll bars
-(add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
+;; Enable vertical scroll bar
+(add-to-list 'default-frame-alist '(vertical-scroll-bars . right))
 (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
+
+;; Smooth scrolling
+(pixel-scroll-precision-mode 1)
+
+;; Touchscreen support
+(add-to-list 'load-path "~/.emacs.d/site-lisp")
+(require 'touch-handler)
 
 ;; Disable splash screen and startup message
 (setq inhibit-startup-message t)
