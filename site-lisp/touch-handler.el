@@ -82,17 +82,17 @@
          (diff-char  (abs (- touchscreen-begin-char pos-char))))
 
     (if (= (length (nth 1 input)) 2)
-        ;; pinch zoom
+        ;; pinch zoom (coarse - requires 50px change)
         (let* ((event2     (nth 1 (nth 1 input)))
                (pos-pixel2 (nth 3 event2))
                (dist       (sqrt (+ (expt (- (car pos-pixel2) (car pos-pixel)) 2)
                                     (expt (- (cdr pos-pixel2) (cdr pos-pixel)) 2))))
                (dist-diff  (- dist touchscreen-last-dist)))
-          (setq touchscreen-last-dist dist)
-          (if (> dist-diff 0)
-              (text-scale-increase 0.1)
-            (if (< dist-diff 0)
-                (text-scale-decrease 0.1))))
+          (when (> (abs dist-diff) 50)
+            (setq touchscreen-last-dist dist)
+            (if (> dist-diff 0)
+                (text-scale-increase 1)
+              (text-scale-decrease 1))))
 
       (if (> diff-time 1)
           ;; TODO: set marker on long press
