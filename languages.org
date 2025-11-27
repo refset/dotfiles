@@ -20,18 +20,18 @@
 (add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
 (setq markdown-fontify-code-blocks-natively t)
 
-(defun ak/markdown-mode-hook ()
+(defun jt/markdown-mode-hook ()
   (flyspell-mode))
-(add-hook 'markdown-mode-hook #'ak/markdown-mode-hook)
+(add-hook 'markdown-mode-hook #'jt/markdown-mode-hook)
 #+end_src
 * Python support
 #+begin_src elisp :results none
-(defun ak/python-mode-hook ()
+(defun jt/python-mode-hook ()
   (setq fill-column 80)
   (auto-fill-mode)
   (display-fill-column-indicator-mode)
   (lsp))
-(add-hook 'python-mode-hook #'ak/python-mode-hook)
+(add-hook 'python-mode-hook #'jt/python-mode-hook)
 (use-package elpy :ensure t)
 (require 'dap-python)
 (setq dap-python-debugger 'debugpy)
@@ -81,12 +81,12 @@
 #+end_src
 * Elisp customisations
 #+begin_src elisp :results none
-(defun ak/emacs-lisp-hook ()
+(defun jt/emacs-lisp-hook ()
   (paredit-mode)
   (setq fill-column 80)
   (auto-fill-mode)
   (display-fill-column-indicator-mode))
-(add-hook 'emacs-lisp-mode-hook #'ak/emacs-lisp-hook)
+(add-hook 'emacs-lisp-mode-hook #'jt/emacs-lisp-hook)
 #+end_src
 * JSON support
 #+begin_src elisp

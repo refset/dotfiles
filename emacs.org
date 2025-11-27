@@ -84,9 +84,13 @@
 
 ** writeroom
 #+begin_src elisp
+;; @jt-menu View | w | Writeroom mode | writeroom-mode
 ;; distraction free editing - central column, minimal
 (use-package writeroom-mode
-  :ensure t)
+  :ensure t
+  :config
+  (add-hook 'writeroom-mode-enable-hook (lambda () (company-mode -1)))
+  (add-hook 'writeroom-mode-disable-hook (lambda () (company-mode 1))))
 #+end_src
 
 ** theme-changer
@@ -194,7 +198,7 @@ However, I disable orderless for Company, because I find it affects performance 
   :init
   (persp-mode))
 
-;; Function to add and switch to buffer in perspective
+;; @jt-menu Perspective | p a | Add buffer
 (defun persp-add-and-switch-buffer (buffer-or-name)
   (interactive
    (list
@@ -203,7 +207,7 @@ However, I disable orderless for Company, because I find it affects performance 
   (persp-add-buffer buffer-or-name)
   (switch-to-buffer buffer-or-name))
 
-;; Function to switch to a new perspective, and add the current buffer
+;; @jt-menu Perspective | p s | Switch & add buffer
 (defun persp-switch-and-add-buffer ()
   (interactive)
   (let ((buffer (buffer-name)))
@@ -216,20 +220,24 @@ However, I disable orderless for Company, because I find it affects performance 
 #+end_src
 *** Switch to workspace for a projectile project
 #+begin_src elisp
-(defun ak/persp-project-switch ()
+;; @jt-menu Perspective | p p | Switch project
+(defun jt/persp-project-switch ()
   (interactive)
   (persp-switch "persp-project-switch")
   (projectile-switch-project)
   (persp-rename (projectile-project-name)))
 
-(define-key perspective-map (kbd "P") #'ak/persp-project-switch)
+(define-key perspective-map (kbd "P") #'jt/persp-project-switch)
 #+end_src
 *** Rename current perspective to current project name
 #+begin_src elisp :results none
-(defun ak/rename-perspective-to-current-project ()
+;; @jt-menu Perspective | p r | Rename to project
+;; @jt-menu Perspective | p n | Next | persp-next
+;; @jt-menu Perspective | p b | Switch | persp-switch
+(defun jt/rename-perspective-to-current-project ()
   (interactive)
   (persp-rename (projectile-project-name)))
-(define-key perspective-map (kbd "R") #'ak/rename-perspective-to-current-project)
+(define-key perspective-map (kbd "R") #'jt/rename-perspective-to-current-project)
 #+end_src
 ** Window switcher
 #+begin_src elisp
@@ -308,6 +316,9 @@ However, I disable orderless for Company, because I find it affects performance 
 ** Magit
 *** Magit
 #+begin_src elisp
+;; @jt-menu Git | g s | Magit status | magit-status
+;; @jt-menu Git | g l | Magit log | magit-log-current
+;; @jt-menu Git | g b | Magit blame | magit-blame
 (use-package magit :ensure t)
 (setq magit-diff-refine-hunk (quote all)) ; Use word diffs when showing diffs
 #+end_src
@@ -319,9 +330,9 @@ However, I disable orderless for Company, because I find it affects performance 
 #+end_src
 ** Flyspell in text mode
 #+begin_src elisp :results none
-(defun ak/text-mode-hook ()
+(defun jt/text-mode-hook ()
   (flyspell-mode))
-(add-hook 'text-mode-hook #'ak/text-mode-hook)
+(add-hook 'text-mode-hook #'jt/text-mode-hook)
 #+end_src
 
 ** Org mode customisation
@@ -339,9 +350,9 @@ However, I disable orderless for Company, because I find it affects performance 
 (define-key org-agenda-mode-map (kbd "C-c o c") #'org-capture)
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
 (setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
-(defun ak/org-mode-hook ()
+(defun jt/org-mode-hook ()
   (flyspell-mode))
-(add-hook 'org-mode-hook #'ak/org-mode-hook)
+(add-hook 'org-mode-hook #'jt/org-mode-hook)
 (setq org-todo-keywords
            '((sequence "TODO" "PROG" "|" "DONE")))
 (setq org-icalendar-store-UID t) ; export tp ical with persistent ids
@@ -373,14 +384,14 @@ However, I disable orderless for Company, because I find it affects performance 
    (shell . t)
    (emacs-lisp . t)))
 
-(defun ak/org-babel-confirm (lang body)
+(defun jt/org-babel-confirm (lang body)
   (not (or (string= lang "elisp")
 	   (string= lang "mermaid")
 	   (string= lang "shell")
 	   (string= lang "sh")
 	   (string= lang "python")
 	   (string= lang "bash"))))
-(setq org-confirm-babel-evaluate #'ak/org-babel-confirm)
+(setq org-confirm-babel-evaluate #'jt/org-babel-confirm)
 #+end_src
 
 *** Function for copying org links
@@ -424,6 +435,7 @@ This function was taken from [[https://emacs.stackexchange.com/questions/3981/ho
 *** Package for inserting emojis
 Allows emojis to easily be inserted from a completion menu.
 #+begin_src elisp :results none
+;; @jt-menu Edit | e | Insert emoji | emojify-insert-emoji
 (use-package emojify :ensure t)
 (setq emojify-display-style 'unicode)
 (setq emojify-emoji-styles '(unicode))
@@ -437,21 +449,22 @@ Allows emojis to easily be inserted from a completion menu.
 #+end_src
 ** Split and draft function
 #+begin_src elisp :results none
-(defun ak/split-and-draft-exit ()
+;; @jt-menu Edit | d | Draft buffer | jt/split-and-draft-enter
+(defun jt/split-and-draft-exit ()
   (interactive)
   (mark-whole-buffer)
   (kill-region nil nil t)
   (kill-buffer-and-window))
 
-(defun ak/split-and-draft-enter ()
+(defun jt/split-and-draft-enter ()
   (interactive)
   (split-window)
   (other-window 1)
-  (set-window-buffer nil (set-buffer (generate-new-buffer "ak/draft")))
+  (set-window-buffer nil (set-buffer (generate-new-buffer "jt/draft")))
   (markdown-mode)
-  (local-set-key (kbd "C-c C-c") #'ak/split-and-draft-exit))
+  (local-set-key (kbd "C-c C-c") #'jt/split-and-draft-exit))
 
-(global-set-key (kbd "C-x D") #'ak/split-and-draft-enter)
+(global-set-key (kbd "C-x D") #'jt/split-and-draft-enter)
 #+end_src
 ** Enable disabled commands
 #+begin_src elisp
@@ -460,33 +473,44 @@ Allows emojis to easily be inserted from a completion menu.
 ** Info customisation
 #+begin_src elisp :results none
 (use-package adaptive-wrap :ensure t)
-(defun ak/info-mode-hook ()
+(defun jt/info-mode-hook ()
   (visual-line-mode)
   (adaptive-wrap-prefix-mode)
   (display-line-numbers-mode -1))
-(add-hook 'Info-mode-hook #'ak/info-mode-hook)
+(add-hook 'Info-mode-hook #'jt/info-mode-hook)
 #+end_src
 ** PDF tools
 #+begin_src elisp :results none
 (when (display-graphic-p)
   (use-package pdf-tools :ensure t)
   (pdf-tools-install)
-  (defun ak/pdf-view-mode-hook ()
+  (defun jt/pdf-view-mode-hook ()
     (display-line-numbers-mode -1)
     (pdf-view-midnight-minor-mode))
-  (add-hook 'pdf-view-mode-hook #'ak/pdf-view-mode-hook))
+  (add-hook 'pdf-view-mode-hook #'jt/pdf-view-mode-hook))
 #+end_src
 ** Custom global keybindings for common commands
 #+begin_src elisp :results none
 (// global-set-key (kbd "C-x E") #'eww)
+;; @jt-menu Edit | y | Yank from kill-ring | yank-from-kill-ring
 (global-set-key (kbd "C-x y") #'yank-from-kill-ring)
+;; @jt-menu Edit | j | Join line | join-line
 (global-set-key (kbd "M-j") #'join-line)
+;; @jt-menu View | v | Visual line mode | visual-line-mode
 (global-set-key (kbd "C-x V") #'visual-line-mode)
+;; @jt-menu View | l | Line numbers | display-line-numbers-mode
+;; @jt-menu Tools | t u | Browse URL at point | browse-url-at-point
 (global-set-key (kbd "M-q") #'browse-url-at-point)
 ;; [[https://google.com/][asdf]]
 #+end_src
 ** Org-roam
 #+begin_src elisp
+;; @jt-menu Org-roam | n f | Find node | org-roam-node-find
+;; @jt-menu Org-roam | n i | Insert node | org-roam-node-insert
+;; @jt-menu Org-roam | n c | Capture | org-roam-capture
+;; @jt-menu Org-roam | n l | Toggle buffer | org-roam-buffer-toggle
+;; @jt-menu Org-roam | n j | Today's daily | org-roam-dailies-goto-today
+;; @jt-menu Org-roam | n g | Graph | org-roam-graph
 (use-package org-roam
   :ensure t
   :custom
@@ -569,9 +593,10 @@ Allows emojis to easily be inserted from a completion menu.
 </svg>")
 
 
+;; @jt-menu Tools | t i | Open in Inkscape
 (defun inkscape-open (path)
   "Open the path in inkscape"
-  (interactive)
+  (interactive "fSVG file: ")
   (unless (f-ext-p path "svg") (error "Must be an svg file."))
   (unless (file-exists-p path)
     (with-temp-file path
@@ -589,6 +614,7 @@ Allows emojis to easily be inserted from a completion menu.
 #+end_src
 ** run prompt.py
 #+begin_src elisp
+;; @jt-menu Tools | t p | Run prompt.py
 (defun run-prompt-with-marked-text ()
   "Run './prompt.py \"marked text\"' in the home directory using the marked text as input, asynchronously."
   (interactive)
@@ -662,4 +688,9 @@ Allows emojis to easily be inserted from a completion menu.
 ;; (modify-face whitespace-tab nil "#F92672")
 (setq whitespace-style '(face tabs))
 (whitespace-mode)
+#+end_src
+** Personal menu
+Load at the end to avoid scanning partially-loaded org files.
+#+begin_src elisp
+(require 'jt-menu)
 #+end_src
