@@ -357,6 +357,15 @@ However, I disable orderless for Company, because I find it affects performance 
 (define-key org-agenda-mode-map (kbd "C-c o c") #'org-capture)
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
 (setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
+
+(defun jt/org-image-scale-refresh ()
+  "Refresh inline images scaled to current text zoom level."
+  (when (derived-mode-p 'org-mode)
+    (let* ((scale (expt text-scale-mode-step text-scale-mode-amount))
+           (org-image-actual-width (truncate (* 400 scale))))
+      (org-display-inline-images t t))))
+
+(add-hook 'text-scale-mode-hook #'jt/org-image-scale-refresh)
 (defun jt/org-mode-hook ()
   (flyspell-mode))
 (add-hook 'org-mode-hook #'jt/org-mode-hook)
@@ -538,8 +547,9 @@ Allows emojis to easily be inserted from a completion menu.
    xmlns=\"http://www.w3.org/2000/svg\"
    xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"
    xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"
-   width=\"744.09448819\"
-   height=\"1052.3622047\"
+   width=\"800\"
+   height=\"600\"
+   viewBox=\"0 0 800 600\"
    id=\"svg2\"
    version=\"1.1\"
    inkscape:version=\"0.92.2 (5c3e80d, 2017-08-06)\"
@@ -548,21 +558,21 @@ Allows emojis to easily be inserted from a completion menu.
      id=\"defs4\" />
   <sodipodi:namedview
      id=\"base\"
-     pagecolor=\"#ffffff\"
+     pagecolor=\"#000000\"
      bordercolor=\"#666666\"
      borderopacity=\"1.0\"
-     inkscape:pageopacity=\"0.0\"
+     inkscape:pageopacity=\"1.0\"
      inkscape:pageshadow=\"2\"
-     inkscape:zoom=\"0.35\"
-     inkscape:cx=\"375\"
-     inkscape:cy=\"520\"
+     inkscape:zoom=\"1.0\"
+     inkscape:cx=\"400\"
+     inkscape:cy=\"300\"
      inkscape:document-units=\"px\"
      inkscape:current-layer=\"layer1\"
      showgrid=\"false\"
-     inkscape:window-width=\"460\"
-     inkscape:window-height=\"438\"
-     inkscape:window-x=\"871\"
-     inkscape:window-y=\"33\"
+     inkscape:window-width=\"800\"
+     inkscape:window-height=\"600\"
+     inkscape:window-x=\"0\"
+     inkscape:window-y=\"0\"
      inkscape:window-maximized=\"0\" />
   <metadata
      id=\"metadata7\">
@@ -593,6 +603,38 @@ Allows emojis to easily be inserted from a completion menu.
       (insert template-svg)))
   (shell-command (format "inkscape %s &" path)))
 
+;; @jt-menu Org | o i | New Inkscape drawing
+(defun jt/org-inkscape-new ()
+  "Create new SVG in org file directory, embed it, and open in Inkscape.
+When Inkscape closes, refresh inline images."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (error "Must be in org-mode"))
+  (let ((filepath (buffer-file-name (buffer-base-buffer))))
+    (unless filepath
+      (let ((default-name (concat (file-name-sans-extension (buffer-name)) ".org")))
+        (setq filepath (read-file-name "Save SVG in directory: " "~/org-roam/" nil nil default-name))
+        (setq filepath (if (file-directory-p filepath)
+                           filepath
+                         (file-name-directory filepath)))))
+    (let* ((dir (if (file-directory-p filepath) filepath (file-name-directory filepath)))
+           (base (file-name-sans-extension (file-name-nondirectory filepath)))
+           (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+           (filename (concat base "-" timestamp ".svg"))
+           (svgpath (expand-file-name filename dir))
+           (buf (current-buffer)))
+      (when (file-exists-p svgpath)
+        (error "File %s already exists" filename))
+      (with-temp-file svgpath
+        (insert template-svg))
+      (insert (format "#+ATTR_ORG: :width 400\n[[file:%s]]" filename))
+      (org-display-inline-images)
+      (set-process-sentinel
+       (start-process "inkscape" nil "inkscape" svgpath)
+       (lambda (proc event)
+         (when (string-match-p "finished\\|exited" event)
+           (with-current-buffer buf
+             (org-display-inline-images t t))))))))
 
 (org-link-set-parameters
  "file"
@@ -682,5 +724,14 @@ Allows emojis to easily be inserted from a completion menu.
 ** Personal menu
 Load at the end to avoid scanning partially-loaded org files.
 #+begin_src elisp
+;; @jt-menu Tools | t r | Reload config
+(defun jt/reload-config ()
+  "Tangle emacs.org and reload configuration."
+  (interactive)
+  (org-babel-tangle-file "~/.emacs.d/emacs.org")
+  (load "~/.emacs.d/emacs.el")
+  (jt/menu-rebuild)
+  (message "Config tangled and reloaded"))
+
 (require 'jt-menu)
 #+end_src
