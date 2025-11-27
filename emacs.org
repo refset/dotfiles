@@ -345,12 +345,56 @@ However, I disable orderless for Company, because I find it affects performance 
 ;; @jt-menu Org | o e | Export | org-export-dispatch
 ;; @jt-menu Org | o p | Set property | org-set-property
 ;; @jt-menu Org | o . | Set timestamp | org-time-stamp
+;; @jt-menu Org | o ? | Speed keys help | org-speed-command-help
 ;; Org mode customisation
 (setq org-agenda-files '("~/org/"))
+
+;; Hourly backups of org files with pruning
+(defun jt/backup-org-files ()
+  "Copy org files to .backups with timestamp, then prune old backups."
+  (let* ((backup-dir (expand-file-name ".backups" "~/org"))
+         (timestamp (format-time-string "%Y%m%d-%H%M"))
+         (dest-dir (expand-file-name timestamp backup-dir)))
+    (make-directory backup-dir t)
+    (make-directory dest-dir t)
+    (dolist (file (directory-files "~/org" t "\\.org$"))
+      (copy-file file (expand-file-name (file-name-nondirectory file) dest-dir) t))
+    (jt/prune-org-backups backup-dir)))
+
+(defun jt/prune-org-backups (backup-dir)
+  "Keep one backup per bucket: 0-1h, 1h-1d, 1d-1w, 1w-1m, 1m-1y, 1y+."
+  (let* ((now (float-time))
+         (hour 3600) (day 86400) (week 604800) (month 2592000) (year 31536000)
+         (buckets (list 0 hour day week month year most-positive-fixnum))
+         (dirs (seq-filter
+                #'file-directory-p
+                (directory-files backup-dir t "^[0-9]\\{8\\}-[0-9]\\{4\\}$")))
+         (aged (mapcar
+                (lambda (d)
+                  (cons d (- now (float-time (nth 5 (file-attributes d))))))
+                dirs))
+         (keep nil))
+    (dotimes (i (1- (length buckets)))
+      (let* ((min-age (nth i buckets))
+             (max-age (nth (1+ i) buckets))
+             (in-bucket (seq-filter
+                         (lambda (x) (and (>= (cdr x) min-age) (< (cdr x) max-age)))
+                         aged)))
+        (when in-bucket
+          (if (= i 0)
+              (push (caar (seq-sort-by #'cdr #'< in-bucket)) keep)
+            (push (caar (seq-sort-by #'cdr #'> in-bucket)) keep)))))
+    (dolist (entry aged)
+      (unless (member (car entry) keep)
+        (delete-directory (car entry) t)))))
+
+(defvar jt/backup-timer nil)
+(when jt/backup-timer (cancel-timer jt/backup-timer))
+(setq jt/backup-timer (run-at-time "1 hour" 3600 #'jt/backup-org-files))
 (setq org-capture-templates
       '(("w" "Work")
         ("wt" "Work TODO" entry (file+headline "~/org/work.org" "Unsorted")
-         (file "~/org/templates/todo.org"))
+         (file "~/org/templates/work-todo.org"))
         ("h" "Home")
         ("ht" "Home TODO" entry (file+headline "~/org/home.org" "Unsorted")
          (file "~/org/templates/todo.org"))
