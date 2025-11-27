@@ -90,6 +90,10 @@
     (use-package theme-changer
       :ensure t)
     (change-theme 'spacemacs-light 'spacemacs-dark)
+    (when (daemonp)
+      (add-hook 'server-after-make-frame-hook
+                (lambda ()
+                  (change-theme 'spacemacs-light 'spacemacs-dark))))
 #+end_src
 
 ** trailing whitespace
