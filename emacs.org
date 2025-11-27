@@ -314,7 +314,6 @@ However, I disable orderless for Company, because I find it affects performance 
        (t (concat (if (string= "AC" type) " AC" "") percentage time))))))
 #+end_src
 ** Magit
-*** Magit
 #+begin_src elisp
 ;; @jt-menu Git | g s | Magit status | magit-status
 ;; @jt-menu Git | g l | Magit log | magit-log-current
@@ -338,6 +337,14 @@ However, I disable orderless for Company, because I find it affects performance 
 ** Org mode customisation
 *** Org config and key bindings
 #+begin_src elisp :results none
+;; @jt-menu Org | o s | Insert src block | org-insert-structure-template
+;; @jt-menu Org | o t | Cycle TODO | org-todo
+;; @jt-menu Org | o c | Capture | org-capture
+;; @jt-menu Org | o a | Agenda | org-agenda
+;; @jt-menu Org | o l | Insert link | org-insert-link
+;; @jt-menu Org | o e | Export | org-export-dispatch
+;; @jt-menu Org | o p | Set property | org-set-property
+;; @jt-menu Org | o . | Set timestamp | org-time-stamp
 ;; Org mode customisation
 (// setq org-startup-folded t) ; open org files folded, rather than expanded
 (setq org-edit-src-content-indentation 0) ; do not indent code in source blocks
@@ -408,23 +415,6 @@ This function was taken from [[https://emacs.stackexchange.com/questions/3981/ho
     (message (concat "Copied URL: " url))))
 
 (define-key org-mode-map (kbd "C-x C-l") 'farynaio/org-link-copy)
-#+end_src
-** EAF
-#+begin_src elisp :results none
-(// use-package eaf
-  :load-path "~/.emacs.d/site-lisp/emacs-application-framework"
-  :custom
-  ; See https://github.com/emacs-eaf/emacs-application-framework/wiki/Customization
-  (eaf-browser-continue-where-left-off t)
-  (eaf-browser-enable-adblocker t)
-  (browse-url-browser-function 'eaf-open-browser)
-  :config
-  (defalias 'browse-web #'eaf-open-browser)
-  (// eaf-bind-key scroll_up "C-n" eaf-pdf-viewer-keybinding)
-  (// eaf-bind-key scroll_down "C-p" eaf-pdf-viewer-keybinding)
-  (// eaf-bind-key take_photo "p" eaf-camera-keybinding)
-  (// eaf-bind-key nil "M-q" eaf-browser-keybinding))
-
 #+end_src
 ** Which key
 #+begin_src elisp
