@@ -529,6 +529,22 @@ Allows emojis to easily be inserted from a completion menu.
   (require 'org-roam-protocol))
 
 (add-hook 'org-roam-dailies-find-file-hook #'end-of-buffer)
+
+(defvar jt/--pending-daily-frame nil)
+
+(defun jt/--open-daily-delayed ()
+  (when (and jt/--pending-daily-frame (frame-live-p jt/--pending-daily-frame))
+    (with-selected-frame jt/--pending-daily-frame
+      (org-roam-dailies-goto-today)))
+  (setq jt/--pending-daily-frame nil))
+
+(defun jt/open-daily-on-new-frame (frame)
+  "Open today's org-roam daily in new emacsclient frames."
+  (when (daemonp)
+    (setq jt/--pending-daily-frame frame)
+    (run-at-time 0.1 nil #'jt/--open-daily-delayed)))
+
+(add-hook 'after-make-frame-functions #'jt/open-daily-on-new-frame)
 #+end_src
 ** Org-Inkscape
 #+begin_src elisp
