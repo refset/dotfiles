@@ -30,6 +30,12 @@
 (defvar scrollbar-scroll--scroll-window nil
   "Window being scrolled.")
 
+(defvar scrollbar-scroll--hl-line-was-on nil
+  "Whether hl-line was on before scrolling.")
+
+(defvar scrollbar-scroll--cursor-was-on nil
+  "Whether cursor was visible before scrolling.")
+
 (defun scrollbar-scroll--do-scroll (window delta)
   "Scroll WINDOW by DELTA pixels, with throttling.
 Positive DELTA scrolls down, negative scrolls up.
@@ -41,6 +47,13 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
       (setq scrollbar-scroll--end-scroll-timer nil))
     ;; Track window being scrolled
     (setq scrollbar-scroll--scroll-window window)
+    ;; Hide cursor and hl-line during scroll for performance
+    (unless scrollbar-scroll--point-before-scroll
+      (setq scrollbar-scroll--hl-line-was-on (bound-and-true-p global-hl-line-mode))
+      (setq scrollbar-scroll--cursor-was-on cursor-type)
+      (when scrollbar-scroll--hl-line-was-on
+        (global-hl-line-mode -1))
+      (setq cursor-type nil))
     ;; Accumulate delta
     (setq scrollbar-scroll--accumulated-delta
           (+ scrollbar-scroll--accumulated-delta delta))
@@ -94,7 +107,14 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
   "Called when scrolling ends."
   (setq scrollbar-scroll--end-scroll-timer nil)
   (setq scrollbar-scroll--point-before-scroll nil)
-  (setq scrollbar-scroll--scroll-window nil))
+  (setq scrollbar-scroll--scroll-window nil)
+  ;; Restore cursor and hl-line
+  (when scrollbar-scroll--hl-line-was-on
+    (global-hl-line-mode 1))
+  (when scrollbar-scroll--cursor-was-on
+    (setq cursor-type scrollbar-scroll--cursor-was-on))
+  (setq scrollbar-scroll--hl-line-was-on nil)
+  (setq scrollbar-scroll--cursor-was-on nil))
 
 (defun scrollbar-scroll--handler (event)
   "Handle scroll EVENT by jumping to buffer position like scrollbar drag."
