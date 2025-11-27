@@ -41,11 +41,6 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
       (setq scrollbar-scroll--end-scroll-timer nil))
     ;; Track window being scrolled
     (setq scrollbar-scroll--scroll-window window)
-    ;; Ignore scroll-down deltas if end of buffer is already visible
-    (when (and (> delta 0)
-               (with-current-buffer (window-buffer window)
-                 (pos-visible-in-window-p (point-max) window)))
-      (setq delta 0))
     ;; Accumulate delta
     (setq scrollbar-scroll--accumulated-delta
           (+ scrollbar-scroll--accumulated-delta delta))
@@ -64,10 +59,20 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
             ;; Scroll by adjusting window-start directly
             (condition-case nil
                 (let* ((current-start (window-start window))
+                       (win-height (window-body-height window))
+                       ;; Calculate max window-start: go back win-height lines from end
+                       (max-start (save-excursion
+                                    (goto-char (point-max))
+                                    (forward-line (- 1 win-height))
+                                    (point)))
                        (new-start (save-excursion
                                     (goto-char current-start)
                                     (forward-line scroll-lines)
                                     (point)))
+                       ;; Clamp to max-start when scrolling down
+                       (new-start (if (and (> scroll-lines 0) (> new-start max-start))
+                                      max-start
+                                    new-start))
                        (moved (not (= new-start current-start))))
                   (when moved
                     (set-window-start window new-start t)
