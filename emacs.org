@@ -165,7 +165,7 @@ However, I disable orderless for Company, because I find it affects performance 
 ** Avy
 #+begin_src elisp :results none
 (use-package avy :ensure t)
-(global-set-key (kbd "M-a") #'avy-goto-char-timer)
+(global-set-key (kbd "C-f") #'avy-goto-char-timer)
 (global-set-key (kbd "M-g g") #'avy-goto-line)
 #+end_src
 ** Spaceline modeline
@@ -346,6 +346,17 @@ However, I disable orderless for Company, because I find it affects performance 
 ;; @jt-menu Org | o p | Set property | org-set-property
 ;; @jt-menu Org | o . | Set timestamp | org-time-stamp
 ;; Org mode customisation
+(setq org-agenda-files '("~/org/"))
+(setq org-capture-templates
+      '(("w" "Work")
+        ("wt" "Work TODO" entry (file+headline "~/org/work.org" "Unsorted")
+         (file "~/org/templates/todo.org"))
+        ("h" "Home")
+        ("ht" "Home TODO" entry (file+headline "~/org/home.org" "Unsorted")
+         (file "~/org/templates/todo.org"))
+        ("f" "Fun")
+        ("ft" "Fun TODO" entry (file+headline "~/org/fun.org" "Unsorted")
+         (file "~/org/templates/todo.org"))))
 (// setq org-startup-folded t) ; open org files folded, rather than expanded
 (setq org-edit-src-content-indentation 0) ; do not indent code in source blocks
 (setq org-startup-with-inline-images t) ; always show inline images
