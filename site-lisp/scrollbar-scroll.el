@@ -30,9 +30,6 @@
 (defvar scrollbar-scroll--scroll-window nil
   "Window being scrolled.")
 
-(defvar scrollbar-scroll--at-end nil
-  "Non-nil if we've hit end of buffer while scrolling down.")
-
 (defun scrollbar-scroll--do-scroll (window delta)
   "Scroll WINDOW by DELTA pixels, with throttling.
 Positive DELTA scrolls down, negative scrolls up.
@@ -44,11 +41,10 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
       (setq scrollbar-scroll--end-scroll-timer nil))
     ;; Track window being scrolled
     (setq scrollbar-scroll--scroll-window window)
-    ;; If scrolling up, clear the at-end flag
-    (when (< delta 0)
-      (setq scrollbar-scroll--at-end nil))
-    ;; Ignore positive deltas if we're at end of buffer
-    (when (and scrollbar-scroll--at-end (> delta 0))
+    ;; Ignore scroll-down deltas if end of buffer is already visible
+    (when (and (> delta 0)
+               (with-current-buffer (window-buffer window)
+                 (pos-visible-in-window-p (point-max) window)))
       (setq delta 0))
     ;; Accumulate delta
     (setq scrollbar-scroll--accumulated-delta
@@ -70,13 +66,8 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
                                     (goto-char current-start)
                                     (forward-line scroll-lines)
                                     (point)))
-                       ;; Detect if we hit the end (scrolling down but didn't move)
-                       (hit-end (and (> scroll-lines 0) (= new-start current-start))))
-                  (if hit-end
-                      ;; Mark that we're at end and clear delta
-                      (progn
-                        (setq scrollbar-scroll--at-end t)
-                        (setq scrollbar-scroll--accumulated-delta 0.0))
+                       (moved (not (= new-start current-start))))
+                  (when moved
                     (set-window-start window new-start t)
                     ;; If original point is now out of view, move to center
                     (when (and scrollbar-scroll--point-before-scroll
@@ -96,8 +87,7 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
   "Called when scrolling ends."
   (setq scrollbar-scroll--end-scroll-timer nil)
   (setq scrollbar-scroll--point-before-scroll nil)
-  (setq scrollbar-scroll--scroll-window nil)
-  (setq scrollbar-scroll--at-end nil))
+  (setq scrollbar-scroll--scroll-window nil))
 
 (defun scrollbar-scroll--handler (event)
   "Handle scroll EVENT by jumping to buffer position like scrollbar drag."
