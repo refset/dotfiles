@@ -24,7 +24,7 @@
 (defvar scrollbar-scroll--end-scroll-timer nil
   "Timer for detecting end of scroll.")
 
-(defvar scrollbar-scroll-end-delay 0.15
+(defvar scrollbar-scroll-end-delay 0.3
   "Delay in seconds to detect end of scrolling.")
 
 (defvar scrollbar-scroll--scroll-window nil

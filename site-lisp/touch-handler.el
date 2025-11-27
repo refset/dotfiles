@@ -25,16 +25,31 @@
 ;; This file is not part of GNU Emacs.
 ;;; Code:
 
+(require 'scrollbar-scroll)
+
 (defvar touchscreen-last-time)
 (defvar touchscreen-last-pos-pixel)
 (defvar touchscreen-last-dist 0)
 (defvar touchscreen-begin-char)
-(defvar touchscreen-scroll-multiplier 3
-  "Multiplier for touch scroll speed.")
+(defvar touchscreen-momentum 0.0)
+(defvar touchscreen-momentum-decay 0.92)
+(defvar touchscreen-momentum-timer nil)
+(defvar touchscreen-last-velocity 0.0)
+(defvar touchscreen-scroll-window nil)
 
 (defun touchscreen-time ()
   "Time in seconds."
-  (time-convert (current-time) 'integer))
+  (float-time))
+
+(defun touchscreen-momentum-tick ()
+  "Apply momentum scrolling."
+  (when (> (abs touchscreen-momentum) 1.0)
+    (scrollbar-scroll--do-scroll touchscreen-scroll-window touchscreen-momentum)
+    (setq touchscreen-momentum (* touchscreen-momentum touchscreen-momentum-decay)))
+  (when (<= (abs touchscreen-momentum) 1.0)
+    (when touchscreen-momentum-timer
+      (cancel-timer touchscreen-momentum-timer)
+      (setq touchscreen-momentum-timer nil))))
 
 (defun touchscreen-handle-touch-begin (input)
   "Handle touch begining at input INPUT."
@@ -43,15 +58,18 @@
          (pos-pixel (nth 3 event))
          (pos-char  (nth 6 event))
          (win       (nth 1 event)))
-    ;; (message (format "%s" input))
+    ;; Cancel any existing momentum
+    (when touchscreen-momentum-timer
+      (cancel-timer touchscreen-momentum-timer)
+      (setq touchscreen-momentum-timer nil))
+    (setq touchscreen-momentum 0.0)
+    (setq touchscreen-last-velocity 0.0)
     (if (not (equal (selected-window) win))
-        ;; switch window
         (select-window win))
-    ;; set globals
+    (setq touchscreen-scroll-window win)
     (setq touchscreen-last-time (touchscreen-time))
     (setq touchscreen-last-pos-pixel pos-pixel)
-    (setq touchscreen-begin-char pos-char)
-    ))
+    (setq touchscreen-begin-char pos-char)))
 
 (defun touchscreen-handle-touch-update (input)
   "Handle touch update at input INPUT."
@@ -74,19 +92,18 @@
           (if (> dist-diff 0)
               (text-scale-increase 0.1)
             (if (< dist-diff 0)
-                (text-scale-decrease 0.1)))
-          )
+                (text-scale-decrease 0.1))))
 
       (if (> diff-time 1)
           ;; TODO: set marker on long press
           (goto-char pos-char))
       (if (> diff-char 1)
-          ;; scroll
-          (let ((lines (/ diff-pixel (frame-char-height))))
-            (when (not (zerop lines))
-              (scroll-up lines)
-              (setq touchscreen-last-time (touchscreen-time))
-              (setq touchscreen-last-pos-pixel pos-pixel)))))))
+          ;; scroll using scrollbar-scroll's approach
+          (progn
+            (scrollbar-scroll--do-scroll touchscreen-scroll-window diff-pixel)
+            (setq touchscreen-last-velocity (float diff-pixel))
+            (setq touchscreen-last-time (touchscreen-time))
+            (setq touchscreen-last-pos-pixel pos-pixel))))))
 
 (defun touchscreen-handle-touch-end (input)
   "Handle touch end at input INPUT."
@@ -95,7 +112,12 @@
          (pos-char (nth 6 event)))
     (if (= touchscreen-begin-char pos-char)
         ;; move cursor
-        (goto-char pos-char))))
+        (goto-char pos-char)
+      ;; start momentum scrolling
+      (when (> (abs touchscreen-last-velocity) 5.0)
+        (setq touchscreen-momentum touchscreen-last-velocity)
+        (setq touchscreen-momentum-timer
+              (run-at-time 0.016 0.016 #'touchscreen-momentum-tick))))))
 
 (global-set-key [touchscreen-begin]  #'touchscreen-handle-touch-begin)
 (global-set-key [touchscreen-update] #'touchscreen-handle-touch-update)
