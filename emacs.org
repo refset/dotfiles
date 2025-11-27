@@ -30,6 +30,12 @@
 ;; Touchscreen gesture support
 (require 'touch-handler)
 
+;; Hide line wrap continuation arrows in fringe
+(setf (cdr (assq 'continuation fringe-indicator-alist)) '(nil nil))
+
+;; Disable GTK scroll bars (using touch/gesture scrolling)
+(scroll-bar-mode -1)
+
 ;; Disable splash screen and startup message
 (setq inhibit-startup-message t)
 (setq initial-scratch-message nil)
