@@ -9,3 +9,4 @@ Type=Application
 Categories=Development;TextEditor;
 MimeType=text/plain;text/x-chdr;text/x-csrc;text/x-c++hdr;text/x-c++src;text/x-java;text/x-python;application/x-shellscript;
 Keywords=Text;Editor;
+StartupNotify=false
