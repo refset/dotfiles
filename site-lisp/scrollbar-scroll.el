@@ -73,10 +73,11 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
             (condition-case nil
                 (let* ((current-start (window-start window))
                        (win-height (window-body-height window))
-                       ;; Calculate max window-start: go back win-height lines from end
+                       ;; Calculate max window-start: allow scrolling until last line is ~20% from top
+                       (scroll-limit (truncate (* win-height 0.8)))
                        (max-start (save-excursion
                                     (goto-char (point-max))
-                                    (forward-line (- 1 win-height))
+                                    (forward-line (- scroll-limit))
                                     (point)))
                        (new-start (save-excursion
                                     (goto-char current-start)

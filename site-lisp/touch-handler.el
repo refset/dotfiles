@@ -69,9 +69,11 @@
       (with-current-buffer (window-buffer win)
         (let* ((line-height (line-pixel-height))
                (win-height (window-body-height win))
+               ;; Allow scrolling until last line is ~20% from top
+               (scroll-limit (truncate (* win-height 0.8)))
                (max-start (save-excursion
                             (goto-char (point-max))
-                            (forward-line (- 1 win-height))
+                            (forward-line (- scroll-limit))
                             (point)))
                (current-start (window-start win))
                (hit-boundary nil))
@@ -190,9 +192,11 @@
           (with-current-buffer (window-buffer win)
             (let* ((line-height (line-pixel-height))
                    (win-height (window-body-height win))
+                   ;; Allow scrolling until last line is ~20% from top
+                   (scroll-limit (truncate (* win-height 0.8)))
                    (max-start (save-excursion
                                 (goto-char (point-max))
-                                (forward-line (- 1 win-height))
+                                (forward-line (- scroll-limit))
                                 (point)))
                    (current-start (window-start win)))
               ;; Handle scrolling down (positive vscroll)
