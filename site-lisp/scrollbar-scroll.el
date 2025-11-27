@@ -52,8 +52,10 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
     ;; Only process if enough time has passed
     (when (> (- now scrollbar-scroll--last-time) scrollbar-scroll-throttle)
       (let* ((line-height (float (frame-char-height)))
-             (scroll-lines (round (* (/ scrollbar-scroll--accumulated-delta line-height)
-                                     scrollbar-scroll-sensitivity))))
+             (raw-lines (/ scrollbar-scroll--accumulated-delta line-height))
+             (scroll-lines (if (>= raw-lines 0)
+                               (ceiling raw-lines)
+                             (floor raw-lines))))
         (when (not (zerop scroll-lines))
           (with-current-buffer (window-buffer window)
             ;; Save point before scroll (like scroll-bar-drag does)
@@ -75,8 +77,8 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
                       (with-selected-window window
                         (move-to-window-line nil))
                       (setq scrollbar-scroll--point-before-scroll (point)))))
-              (error nil))))
-        (setq scrollbar-scroll--accumulated-delta 0.0)
+              (error nil))
+            (setq scrollbar-scroll--accumulated-delta 0.0)))
         (setq scrollbar-scroll--last-time now)))
     ;; Schedule end-scroll to finalize
     (setq scrollbar-scroll--end-scroll-timer
