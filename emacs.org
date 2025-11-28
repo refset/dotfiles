@@ -4,6 +4,26 @@
 (setq native-comp-async-report-warnings-errors 'silent)
 #+end_src
 
+** Scrolling
+#+begin_src elisp
+(defun jt/scroll-up-command ()
+  "Scroll up, silently stopping at end of buffer."
+  (interactive)
+  (condition-case nil
+      (scroll-up-command)
+    (end-of-buffer nil)))
+
+(defun jt/scroll-down-command ()
+  "Scroll down, silently stopping at beginning of buffer."
+  (interactive)
+  (condition-case nil
+      (scroll-down-command)
+    (beginning-of-buffer nil)))
+
+(global-set-key [next] #'jt/scroll-up-command)
+(global-set-key [prior] #'jt/scroll-down-command)
+#+end_src
+
 ** GUI customisation
 #+begin_src elisp
 ;;TODO setxkbmap -option 'ctrl:nocaps'
