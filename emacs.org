@@ -42,9 +42,15 @@
 (add-to-list 'default-frame-alist '(font . "Source Code Pro 15"))
 
 ;; Maximize new frames when on laptop screen only
+(defun jt/on-laptop-screen-p ()
+  "Return non-nil if currently on the laptop's built-in screen."
+  (let ((monitors (display-monitor-attributes-list)))
+    (and (= (length monitors) 1)
+         (string-prefix-p "eDP" (alist-get 'name (car monitors))))))
+
 (defun jt/maybe-maximize-frame (frame)
-  "Maximize FRAME if only one monitor (laptop) is attached."
-  (when (= (length (display-monitor-attributes-list)) 1)
+  "Maximize FRAME if on laptop screen."
+  (when (jt/on-laptop-screen-p)
     (set-frame-parameter frame 'fullscreen 'maximized)))
 (add-hook 'after-make-frame-functions #'jt/maybe-maximize-frame)
 
@@ -443,6 +449,53 @@ However, I disable orderless for Company, because I find it affects performance 
 (require 'org-agenda)
 (define-key org-agenda-mode-map (kbd "C-c o c") #'org-capture)
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
+
+(defun jt/org-agenda-add-header ()
+  "Add keybinding hints to org-agenda header."
+  (setq header-line-format
+        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  r: refresh  d: pushback  S: save  C: clear  q: quit"))
+(add-hook 'org-agenda-mode-hook #'jt/org-agenda-add-header)
+
+(defvar jt/org-agenda-pending-pushbacks nil
+  "List of (marker . original-deadline) for pending pushbacks.")
+
+(defun jt/org-agenda-pushback-deadline ()
+  "Mark item at point to push back deadline by one day. Press S to save all."
+  (interactive)
+  (let ((marker (org-get-at-bol 'org-marker)))
+    (when marker
+      (push (cons (copy-marker marker) 1) jt/org-agenda-pending-pushbacks)
+      (let ((inhibit-read-only t))
+        (beginning-of-line)
+        (when (re-search-forward "Deadline:" (line-end-position) t)
+          (replace-match "Deadline+1:")))))
+  (forward-line))
+
+(defun jt/org-agenda-flush ()
+  "Apply all pending pushbacks and save."
+  (interactive)
+  (dolist (item jt/org-agenda-pending-pushbacks)
+    (let ((marker (car item))
+          (days (cdr item)))
+      (when (marker-buffer marker)
+        (with-current-buffer (marker-buffer marker)
+          (goto-char marker)
+          (org-deadline nil (format "+%dd" days))))))
+  (org-save-all-org-buffers)
+  (setq jt/org-agenda-pending-pushbacks nil)
+  (org-agenda-redo)
+  (message "Applied %d pushbacks" (length jt/org-agenda-pending-pushbacks)))
+
+(defun jt/org-agenda-clear-pending ()
+  "Clear pending pushbacks without applying."
+  (interactive)
+  (setq jt/org-agenda-pending-pushbacks nil)
+  (org-agenda-redo)
+  (message "Cleared pending pushbacks"))
+
+(define-key org-agenda-mode-map (kbd "d") #'jt/org-agenda-pushback-deadline)
+(define-key org-agenda-mode-map (kbd "S") #'jt/org-agenda-flush)
+(define-key org-agenda-mode-map (kbd "C") #'jt/org-agenda-clear-pending)
 (setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
 
 (defun jt/capture-update-header ()
@@ -625,8 +678,21 @@ Allows emojis to easily be inserted from a completion menu.
 (defun jt/--open-daily-delayed ()
   (when (and jt/--pending-daily-frame (frame-live-p jt/--pending-daily-frame))
     (with-selected-frame jt/--pending-daily-frame
-      (org-roam-dailies-goto-today)))
+      (org-roam-dailies-goto-today)
+      (split-window-below nil)
+      (other-window 1)
+      (org-agenda-list nil)
+      (jt/agenda-scroll-to-current-time)
+      (balance-windows)
+      (other-window 1)))
   (setq jt/--pending-daily-frame nil))
+
+(defun jt/agenda-scroll-to-current-time ()
+  "Scroll agenda so that now line is visible with some context above."
+  (goto-char (point-min))
+  (when (re-search-forward "now - - -" nil t)
+    (beginning-of-line)
+    (recenter 1)))
 
 (defun jt/open-daily-on-new-frame (frame)
   "Open today's org-roam daily in new emacsclient frames."
@@ -840,4 +906,116 @@ Load at the end to avoid scanning partially-loaded org files.
   (message "Config tangled and reloaded"))
 
 (require 'jt-menu)
+#+end_src
+
+** Google Calendar import
+Import events from Google Calendar by copying text from the web agenda view.
+*** Helper functions for parsing
+#+begin_src elisp
+(defun jt/gcal-month-to-number (month)
+  "Convert MONTH abbreviation to two-digit number string."
+  (pcase month
+    ("Jan" "01") ("Feb" "02") ("Mar" "03") ("Apr" "04")
+    ("May" "05") ("Jun" "06") ("Jul" "07") ("Aug" "08")
+    ("Sep" "09") ("Sept" "09") ("Oct" "10") ("Nov" "11") ("Dec" "12")))
+
+(defun jt/gcal-pad-day (day)
+  "Pad DAY to two digits."
+  (if (= (length day) 1)
+      (concat "0" day)
+    day))
+
+(defun jt/gcal-clean-from-time (time)
+  "Ensure TIME has minutes component."
+  (if (< (length time) 3)
+      (format "%s:00" time)
+    time))
+
+(defun jt/gcal-add-am-pm (from to)
+  "Add am/pm suffix from TO time to FROM time if missing."
+  (if (string-match-p ".*[ap]m" from)
+      from
+    (if (string-match "^.*\\([ap]m\\)$" to)
+        (format "%s%s" from (match-string 1 to))
+      from)))
+
+(defun jt/gcal-format-time (time-string)
+  "Parse TIME-STRING like '10am – 11am' into org time range."
+  (when (string-match "\\(.*\\) – \\(.*\\)" time-string)
+    (let* ((to-time (match-string 2 time-string))
+           (from-time (jt/gcal-add-am-pm
+                       (jt/gcal-clean-from-time (match-string 1 time-string))
+                       to-time)))
+      (format "%s-%s" from-time to-time))))
+#+end_src
+*** Parser function
+#+begin_src elisp
+(defun jt/gcal-to-org (org-buffer-name)
+  "Parse Google Calendar text in current buffer, output org to ORG-BUFFER-NAME."
+  (goto-char (point-min))
+  (let ((org-buffer (get-buffer-create org-buffer-name))
+        (current-day nil)
+        (current-year (nth 2 (calendar-current-date)))
+        (current-month nil)
+        (current-time nil))
+    (with-current-buffer org-buffer
+      (org-mode)
+      (erase-buffer)
+      (insert "* Work Calendar\n"))
+    (while (< (line-number-at-pos) (count-lines (point-min) (point-max)))
+      (let ((current-line (buffer-substring-no-properties
+                           (line-beginning-position)
+                           (line-end-position))))
+        (cond
+         ((string-match "^[0-9]\\{1,2\\}$" current-line)
+          (setq current-day (jt/gcal-pad-day (match-string 0 current-line))))
+         ((string-match "^\\([A-Za-z]\\{3,4\\}\\),.\\{3,4\\}$" current-line)
+          (setq current-month (match-string 1 current-line)))
+         ((string-match "^\\(.*[ap]m\\)$" current-line)
+          (setq current-time (match-string 1 current-line)))
+         (t
+          (let ((event-name current-line))
+            (when (and current-time current-month current-day)
+              (with-current-buffer org-buffer
+                (insert (format "** %s <%s-%s-%s %s>\n"
+                                event-name
+                                current-year
+                                (jt/gcal-month-to-number current-month)
+                                current-day
+                                (jt/gcal-format-time current-time))))
+              (setq current-time nil))))))
+      (forward-line))))
+#+end_src
+*** Interactive import command
+#+begin_src elisp
+(defvar jt/gcal-output-file "~/org/work-cal.org"
+  "File to write imported Google Calendar events.")
+
+;; @jt-menu Org | o g | Import Google Calendar
+(defun jt/gcal-import ()
+  "Import events from Google Calendar.
+Opens a buffer to paste calendar text, then writes to work-cal.org."
+  (interactive)
+  (let ((raw-buffer (get-buffer-create "*jt/gcal-import-raw*")))
+    (switch-to-buffer raw-buffer)
+    (erase-buffer)
+    (browse-url "https://calendar.google.com/calendar/u/0/r/agenda")
+    (insert "Paste Google Calendar agenda text here, then press C-c C-c\n")
+    (insert "------------------------------------------------------\n\n")
+    (local-set-key
+     (kbd "C-c C-c")
+     (lambda ()
+       (interactive)
+       (let ((org-buffer (get-buffer-create "*jt/gcal-import-org*")))
+         (save-excursion
+           (goto-char (point-min))
+           (forward-line 3)
+           (delete-region (point-min) (point)))
+         (jt/gcal-to-org org-buffer)
+         (with-current-buffer org-buffer
+           (write-file (expand-file-name jt/gcal-output-file))
+           (message "Wrote %d lines to %s"
+                    (count-lines (point-min) (point-max))
+                    jt/gcal-output-file))
+         (kill-buffer "*jt/gcal-import-raw*"))))))
 #+end_src
