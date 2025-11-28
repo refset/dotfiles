@@ -2,7 +2,9 @@
 
 (defvar-local org-image-sidebar--buffer nil)
 (defvar-local org-image-sidebar--source-buffer nil)
+(defvar-local org-image-sidebar--update-timer nil)
 (defvar org-image-sidebar-width 0.4)
+(defvar org-image-sidebar-delay 0.2)
 (defvar org-image-sidebar-extensions '("svg" "png" "jpg" "jpeg" "gif" "webp" "bmp" "tiff" "tif"))
 
 (defun org-image-sidebar--extension-regexp ()
@@ -13,7 +15,7 @@
   "Return non-nil if current buffer contains image file references."
   (save-excursion
     (goto-char (point-min))
-    (re-search-forward (concat "\\[\\[file:[^]]+\\(" (org-image-sidebar--extension-regexp) "\\)\\]") nil t)))
+    (re-search-forward (concat "\\[\\[file:[^]]+?" (org-image-sidebar--extension-regexp) "\\]") nil t)))
 
 (defun org-image-sidebar--get-visible-images ()
   "Get list of image file links visible in current window."
@@ -23,11 +25,11 @@
         images)
     (save-excursion
       (goto-char start)
-      (while (re-search-forward (concat "\\[\\[file:\\([^]]+\\)" ext-re "\\]") end t)
-        (push (concat (match-string 1) (match-string 2)) images))
+      (while (re-search-forward (concat "\\[\\[file:\\([^]]+?" ext-re "\\)\\]") end t)
+        (push (substring-no-properties (match-string 1)) images))
       (goto-char start)
-      (while (re-search-forward (concat "^#\\+RESULTS:.*\n\\[\\[file:\\([^]]+\\)" ext-re "\\]") end t)
-        (let ((path (concat (match-string 1) (match-string 2))))
+      (while (re-search-forward (concat "^#\\+RESULTS:.*\n\\[\\[file:\\([^]]+?" ext-re "\\)\\]") end t)
+        (let ((path (substring-no-properties (match-string 1))))
           (unless (member path images)
             (push path images)))))
     (nreverse images)))
@@ -51,6 +53,18 @@
      ((string= ext "bmp") 'bmp)
      (t nil))))
 
+(defun org-image-sidebar--calculate-scale (images sidebar-win)
+  "Calculate scale factor so all IMAGES fit in SIDEBAR-WIN height."
+  (let* ((win-height (window-body-height sidebar-win t))
+         (win-width (window-body-width sidebar-win t))
+         (line-height (frame-char-height))
+         (num-images (length images))
+         (label-height (* num-images (* 2 line-height)))
+         (available-height (- win-height label-height))
+         (height-per-image (max 20 (/ available-height (max 1 num-images))))
+         (max-width (- win-width 20)))
+    (cons max-width height-per-image)))
+
 (defun org-image-sidebar--update ()
   "Update the sidebar with images visible in the source buffer."
   (when (and org-image-sidebar--buffer
@@ -64,32 +78,50 @@
           (erase-buffer)
           (if (null images)
               (insert (propertize "No images in view" 'face 'font-lock-comment-face))
-            (dolist (img-path images)
-              (let ((full-path (org-image-sidebar--expand-path img-path)))
-                (insert (propertize (file-name-nondirectory img-path)
-                                    'face 'font-lock-keyword-face)
-                        "\n")
-                (if (file-exists-p full-path)
-                    (let* ((win-width (window-body-width sidebar-win t))
-                           (img-type (org-image-sidebar--image-type full-path))
-                           (img (create-image full-path img-type nil
-                                              :max-width (- win-width 20))))
-                      (insert-image img)
-                      (insert "\n\n"))
-                  (insert (propertize "  [file not found]\n\n" 'face 'error)))))))
+            (let* ((size (org-image-sidebar--calculate-scale images sidebar-win))
+                   (max-width (car size))
+                   (max-height (cdr size)))
+              (dolist (img-path images)
+                (let ((full-path (org-image-sidebar--expand-path img-path)))
+                  (insert (propertize (file-name-nondirectory img-path)
+                                      'face 'font-lock-keyword-face)
+                          "\n")
+                  (if (file-exists-p full-path)
+                      (let* ((img-type (org-image-sidebar--image-type full-path))
+                             (img (create-image full-path img-type nil
+                                                :max-width max-width
+                                                :max-height max-height)))
+                        (insert-image img)
+                        (insert "\n"))
+                    (insert (propertize "  [file not found]\n" 'face 'error))))))))
         (goto-char (point-min))))))
+
+(defun org-image-sidebar--schedule-update ()
+  "Schedule a debounced update of the sidebar."
+  (when org-image-sidebar--update-timer
+    (cancel-timer org-image-sidebar--update-timer))
+  (setq org-image-sidebar--update-timer
+        (run-with-timer org-image-sidebar-delay nil
+                        (lambda (buf)
+                          (when (buffer-live-p buf)
+                            (with-current-buffer buf
+                              (setq org-image-sidebar--update-timer nil)
+                              (org-image-sidebar--update))))
+                        (current-buffer))))
 
 (defun org-image-sidebar--scroll-hook (&rest _)
   "Hook to update sidebar on scroll."
   (when org-image-sidebar-mode
-    (org-image-sidebar--update)))
+    (org-image-sidebar--schedule-update)))
 
 (defun org-image-sidebar--create-buffer ()
   "Create or get the sidebar buffer."
   (let ((buf (get-buffer-create (format "*Images: %s*" (buffer-name)))))
     (with-current-buffer buf
       (special-mode)
-      (setq org-image-sidebar--source-buffer (current-buffer)))
+      (setq org-image-sidebar--source-buffer (current-buffer))
+      (face-remap-add-relative 'default :background "black" :foreground "white")
+      (setq-local display-line-numbers nil))
     buf))
 
 (defun org-image-sidebar--show-sidebar ()
@@ -137,6 +169,9 @@
   "Remove the sidebar."
   (remove-hook 'window-scroll-functions #'org-image-sidebar--scroll-hook t)
   (remove-hook 'post-command-hook #'org-image-sidebar--scroll-hook t)
+  (when org-image-sidebar--update-timer
+    (cancel-timer org-image-sidebar--update-timer)
+    (setq org-image-sidebar--update-timer nil))
   (org-image-sidebar--hide-sidebar))
 
 ;;;###autoload
