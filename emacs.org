@@ -1,4 +1,9 @@
 * Config
+** Native compilation
+#+begin_src elisp
+(setq native-comp-async-report-warnings-errors 'silent)
+#+end_src
+
 ** GUI customisation
 #+begin_src elisp
 ;;TODO setxkbmap -option 'ctrl:nocaps'
@@ -403,7 +408,7 @@ However, I disable orderless for Company, because I find it affects performance 
          (file "~/org/templates/todo.org"))))
 (// setq org-startup-folded t) ; open org files folded, rather than expanded
 (setq org-edit-src-content-indentation 0) ; do not indent code in source blocks
-(setq org-startup-with-inline-images t) ; always show inline images
+(setq org-startup-with-inline-images nil) ; use svg sidebar instead
 (setq org-adapt-indentation nil) ; do not indent headline contents with headline
 (setq org-use-speed-commands t) ; use speed keys in org buffers
 (define-key org-mode-map (kbd "C-c C-s") #'org-insert-structure-template)
@@ -413,14 +418,6 @@ However, I disable orderless for Company, because I find it affects performance 
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
 (setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
 
-(defun jt/org-image-scale-refresh ()
-  "Refresh inline images scaled to current text zoom level."
-  (when (derived-mode-p 'org-mode)
-    (let* ((scale (expt text-scale-mode-step text-scale-mode-amount))
-           (org-image-actual-width (truncate (* 400 scale))))
-      (org-display-inline-images t t))))
-
-(add-hook 'text-scale-mode-hook #'jt/org-image-scale-refresh)
 (defun jt/org-mode-hook ()
   (flyspell-mode))
 (add-hook 'org-mode-hook #'jt/org-mode-hook)
@@ -437,6 +434,10 @@ However, I disable orderless for Company, because I find it affects performance 
 (setq org-ellipsis "▼")
 (use-package org-download :ensure t)
 (setq org-download-screenshot-method "spectacle -br -o %s")
+
+;; @jt-menu View | s | SVG sidebar | org-svg-sidebar-mode
+(require 'org-svg-sidebar)
+(add-hook 'org-mode-hook #'org-svg-sidebar-mode)
 #+end_src
 *** Org babel config
 #+begin_src elisp :results none
