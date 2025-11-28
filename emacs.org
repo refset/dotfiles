@@ -41,6 +41,13 @@
 
 (add-to-list 'default-frame-alist '(font . "Source Code Pro 15"))
 
+;; Maximize new frames when on laptop screen only
+(defun jt/maybe-maximize-frame (frame)
+  "Maximize FRAME if only one monitor (laptop) is attached."
+  (when (= (length (display-monitor-attributes-list)) 1)
+    (set-frame-parameter frame 'fullscreen 'maximized)))
+(add-hook 'after-make-frame-functions #'jt/maybe-maximize-frame)
+
 ;; Enable vertical scroll bar
 (add-to-list 'default-frame-alist '(vertical-scroll-bars . right))
 (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
@@ -438,6 +445,13 @@ However, I disable orderless for Company, because I find it affects performance 
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
 (setq org-image-actual-width nil) ; allow image widths to be overridden with #+ATTR_ORG: :width 100
 
+(defun jt/capture-update-header ()
+  "Add extra hint to capture buffer header line."
+  (setq header-line-format
+        (concat header-line-format
+                "  C-c C-c: finish, C-c C-k: abort, M-x org-capture-mode: convert to normal buffer")))
+(add-hook 'org-capture-mode-hook #'jt/capture-update-header)
+
 (defun jt/org-mode-hook ()
   (flyspell-mode))
 (add-hook 'org-mode-hook #'jt/org-mode-hook)
@@ -455,9 +469,9 @@ However, I disable orderless for Company, because I find it affects performance 
 (use-package org-download :ensure t)
 (setq org-download-screenshot-method "spectacle -br -o %s")
 
-;; @jt-menu View | s | SVG sidebar | org-svg-sidebar-mode
-(require 'org-svg-sidebar)
-(add-hook 'org-mode-hook #'org-svg-sidebar-mode)
+;; @jt-menu View | i | Image sidebar | org-image-sidebar-mode
+(require 'org-image-sidebar)
+(add-hook 'org-mode-hook #'org-image-sidebar-mode)
 #+end_src
 *** Org babel config
 #+begin_src elisp :results none
