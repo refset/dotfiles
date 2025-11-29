@@ -432,7 +432,11 @@ However, I disable orderless for Company, because I find it affects performance 
 (setq org-capture-templates
       '(("w" "Work")
         ("wt" "Work TODO" entry (file+headline "~/org/work.org" "Unsorted")
-         (file "~/org/templates/work-todo.org"))
+         "** TODO %?\n%u\n%^{Schedule?||SCHEDULED: %^t}")
+        ("wd" "Work Deadline" entry (file+headline "~/org/work.org" "Unsorted")
+         (file "~/org/templates/work-deadline.org"))
+        ("wn" "Work Next Task" entry (file+headline "~/org/work.org" "Unsorted")
+         "** NEXT %?\nDEADLINE: %t")
         ("h" "Home")
         ("ht" "Home TODO" entry (file+headline "~/org/home.org" "Unsorted")
          (file "~/org/templates/todo.org"))
@@ -450,41 +454,160 @@ However, I disable orderless for Company, because I find it affects performance 
 (define-key org-agenda-mode-map (kbd "C-c o c") #'org-capture)
 (define-key org-mode-map (kbd "C-c o a") #'org-agenda)
 
+(setq org-agenda-time-grid
+      '((daily today)
+        (800 1000 1200 1400 1600 1800 2000)
+        "......" "----------------"))
+
+;; GTD-style agenda view from https://www.labri.fr/perso/nrougier/GTD/index.html
+(setq org-agenda-custom-commands
+      '(("g" "Get Things Done (GTD)"
+         ((agenda ""
+                  ((org-agenda-span 'day)
+                   (org-agenda-skip-function
+                    '(org-agenda-skip-entry-if 'deadline))
+                   (org-deadline-warning-days 0)))
+          (tags-todo "+DEADLINE>=\"<-7d>\"+DEADLINE<=\"<+7d>\"/NEXT"
+                ((org-agenda-prefix-format "  %-12:c")
+                 (org-agenda-sorting-strategy '(deadline-up))
+                 (org-agenda-overriding-header "\nDeadlines\n")))
+          (todo "NEXT"
+                ((org-agenda-skip-function
+                  '(org-agenda-skip-entry-if 'deadline))
+                 (org-agenda-prefix-format "  %i %-12:c ")
+                 (org-agenda-overriding-header "\nTasks\n")))))))
+
+(setq org-agenda-block-separator nil)
+
+(defun jt/deadline-days-prefix ()
+  "Return string showing days until deadline for current entry."
+  (let ((deadline (org-get-deadline-time (point))))
+    (if deadline
+        (let ((days (- (time-to-days deadline) (time-to-days (current-time)))))
+          (cond
+           ((< days 0) (format "%dd ago" (- days)))
+           ((= days 0) "today")
+           ((= days 1) "tomorrow")
+           (t (format "in %dd" days))))
+      "")))
+
+(defun jt/org-agenda-finalize-hook ()
+  "Clean up agenda view after it's built."
+  (jt/agenda-add-deadline-days)
+  (jt/agenda-add-scheduled-dates)
+  (jt/agenda-hide-empty-sections)
+  (jt/agenda-collapse-empty-lines))
+(add-hook 'org-agenda-finalize-hook #'jt/org-agenda-finalize-hook)
+
+(defun jt/agenda-hide-empty-sections ()
+  "Hide section headers that have no entries."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^Deadlines$" nil t)
+        (let ((header-start (line-beginning-position)))
+          (forward-line 1)
+          (if (or (eobp) (looking-at "^[A-Z]") (looking-at "^$"))
+              (delete-region header-start (point))))))))
+
+(defun jt/agenda-add-deadline-days ()
+  "Add days-until-deadline prefix to deadline entries in agenda."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^Deadlines$" nil t)
+        (forward-line 1)
+        (while (and (not (eobp))
+                    (not (looking-at "^[A-Z]")))
+          (when (looking-at "^  ")
+            (let* ((marker (org-get-at-bol 'org-hd-marker))
+                   (days-str (when marker
+                               (with-current-buffer (marker-buffer marker)
+                                 (goto-char marker)
+                                 (jt/deadline-days-prefix)))))
+              (when (and days-str (not (string-empty-p days-str)))
+                (goto-char (+ (line-beginning-position) 2))
+                (insert (format "%-10s" days-str)))))
+          (forward-line 1))))))
+
+(defun jt/agenda-add-scheduled-dates ()
+  "Add scheduled date suffix to entries in Tasks section."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^Tasks$" nil t)
+        (forward-line 1)
+        (while (and (not (eobp))
+                    (not (looking-at "^[A-Z]")))
+          (when (looking-at "^  ")
+            (let* ((marker (org-get-at-bol 'org-hd-marker)))
+              (when marker
+                (let ((scheduled (with-current-buffer (marker-buffer marker)
+                                   (goto-char marker)
+                                   (org-get-scheduled-time (point)))))
+                  (when scheduled
+                    (end-of-line)
+                    (insert (propertize (format " [%s]" (format-time-string "%b %d" scheduled))
+                                        'face 'org-date)))))))
+          (forward-line 1))))))
+
 (defun jt/org-agenda-add-header ()
   "Add keybinding hints to org-agenda header."
   (setq header-line-format
-        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  r: refresh  d: pushback  S: save  C: clear  q: quit"))
+        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  r: refresh  d: pushback  S: save  C: clear  q: quit")
+  (setq-local show-trailing-whitespace nil))
 (add-hook 'org-agenda-mode-hook #'jt/org-agenda-add-header)
 
+(setq org-agenda-sticky nil)
+(define-key org-agenda-mode-map (kbd "f") #'org-agenda-later)
+(define-key org-agenda-mode-map (kbd "b") #'org-agenda-earlier)
+
 (defvar jt/org-agenda-pending-pushbacks nil
-  "List of (marker . original-deadline) for pending pushbacks.")
+  "List of (marker . days) for pending pushbacks.")
 
 (defun jt/org-agenda-pushback-deadline ()
-  "Mark item at point to push back deadline by one day. Press S to save all."
+  "Mark item at point to push back by one day. Press S to save all.
+Works on any agenda line with a timestamp (deadlines, scheduled, or calendar events)."
   (interactive)
-  (let ((marker (org-get-at-bol 'org-marker)))
-    (when marker
-      (push (cons (copy-marker marker) 1) jt/org-agenda-pending-pushbacks)
+  (let ((marker (org-get-at-bol 'org-marker))
+        (hdmarker (org-get-at-bol 'org-hd-marker)))
+    (when (or marker hdmarker)
+      (push (cons (copy-marker (or marker hdmarker)) 1) jt/org-agenda-pending-pushbacks)
       (let ((inhibit-read-only t))
         (beginning-of-line)
-        (when (re-search-forward "Deadline:" (line-end-position) t)
-          (replace-match "Deadline+1:")))))
+        (cond
+         ((re-search-forward "Deadline:" (line-end-position) t)
+          (replace-match "Deadline+1:"))
+         ((re-search-forward "Scheduled:" (line-end-position) t)
+          (replace-match "Scheduled+1:"))
+         (t
+          (end-of-line)
+          (insert " [+1d]"))))))
   (forward-line))
 
 (defun jt/org-agenda-flush ()
   "Apply all pending pushbacks and save."
   (interactive)
-  (dolist (item jt/org-agenda-pending-pushbacks)
-    (let ((marker (car item))
-          (days (cdr item)))
-      (when (marker-buffer marker)
-        (with-current-buffer (marker-buffer marker)
-          (goto-char marker)
-          (org-deadline nil (format "+%dd" days))))))
-  (org-save-all-org-buffers)
-  (setq jt/org-agenda-pending-pushbacks nil)
-  (org-agenda-redo)
-  (message "Applied %d pushbacks" (length jt/org-agenda-pending-pushbacks)))
+  (let ((count (length jt/org-agenda-pending-pushbacks)))
+    (dolist (item jt/org-agenda-pending-pushbacks)
+      (let ((marker (car item))
+            (days (cdr item)))
+        (when (marker-buffer marker)
+          (with-current-buffer (marker-buffer marker)
+            (goto-char marker)
+            (cond
+             ((org-get-deadline-time (point))
+              (org-deadline nil (format "+%dd" days)))
+             ((org-get-scheduled-time (point))
+              (org-schedule nil (format "+%dd" days)))
+             (t
+              (org-end-of-meta-data t)
+              (when (re-search-backward org-ts-regexp (line-beginning-position -2) t)
+                (org-timestamp-change days 'day))))))))
+    (org-save-all-org-buffers)
+    (setq jt/org-agenda-pending-pushbacks nil)
+    (org-agenda-redo)
+    (message "Applied %d pushbacks" count)))
 
 (defun jt/org-agenda-clear-pending ()
   "Clear pending pushbacks without applying."
@@ -508,8 +631,41 @@ However, I disable orderless for Company, because I find it affects performance 
 (defun jt/org-mode-hook ()
   (flyspell-mode))
 (add-hook 'org-mode-hook #'jt/org-mode-hook)
+#+end_src
+*** TODO keywords
+Extended TODO keywords following GTD principles. See https://cachestocaches.com/2016/9/my-workflow-org-agenda/
+- TODO: tasks/projects that need to get done (a "project" is any TODO with sub-TODOs)
+- NEXT: the next action within a project; a project without NEXT is "stuck"
+- WAITING: blocked on someone else (prompts for note on who/why)
+- INACTIVE: ideas to revisit later when time permits
+- DONE: completed
+- CANCELLED: fizzled out (prompts for note on why)
+- MEETING: meeting notes
+
+Use ~C-c C-t~ then the shortcut key to quickly change state. The ~@~ suffix prompts for a note.
+#+begin_src elisp
 (setq org-todo-keywords
-           '((sequence "TODO" "PROG" "|" "DONE")))
+      '((sequence "TODO(t)" "NEXT(n)" "WAITING(w@)" "INACTIVE(i)" "|" "DONE(d)" "CANCELLED(c@)" "MEETING(m)")))
+
+(setq org-todo-keyword-faces
+      '(("TODO" . org-warning)
+        ("NEXT" . (:foreground "dodger blue" :weight bold))
+        ("WAITING" . (:foreground "orange" :weight bold))
+        ("INACTIVE" . (:foreground "grey" :weight bold))
+        ("CANCELLED" . (:foreground "grey" :strike-through t))
+        ("MEETING" . (:foreground "purple"))))
+
+(setq org-log-into-drawer t)
+(setq org-log-done 'time)
+
+(defun jt/log-todo-next-creation-date (&rest ignore)
+  "Log NEXT creation time in the property drawer under the key 'ACTIVATED'.
+From https://www.labri.fr/perso/nrougier/GTD/index.html"
+  (when (and (string= (org-get-todo-state) "NEXT")
+             (not (org-entry-get nil "ACTIVATED")))
+    (org-entry-put nil "ACTIVATED" (format-time-string "[%Y-%m-%d]"))))
+(add-hook 'org-after-todo-state-change-hook #'jt/log-todo-next-creation-date)
+
 (setq org-icalendar-store-UID t) ; export tp ical with persistent ids
 (add-hook 'org-mode-hook
           (lambda ()
@@ -681,18 +837,27 @@ Allows emojis to easily be inserted from a completion menu.
       (org-roam-dailies-goto-today)
       (split-window-below nil)
       (other-window 1)
-      (org-agenda-list nil)
-      (jt/agenda-scroll-to-current-time)
-      (balance-windows)
-      (other-window 1)))
+      (org-agenda nil "g")
+      (jt/agenda-collapse-empty-lines)
+      (balance-windows)))
   (setq jt/--pending-daily-frame nil))
 
-(defun jt/agenda-scroll-to-current-time ()
-  "Scroll agenda so that now line is visible with some context above."
-  (goto-char (point-min))
-  (when (re-search-forward "now - - -" nil t)
-    (beginning-of-line)
-    (recenter 1)))
+(defun jt/agenda-collapse-empty-lines ()
+  "Remove empty time grid lines above the current time and collapse multiple blank lines."
+  (let ((inhibit-read-only t)
+        (now-pos nil))
+    (goto-char (point-min))
+    (when (re-search-forward " - - - - - - -" nil t)
+      (setq now-pos (point)))
+    (when now-pos
+      (goto-char (point-min))
+      (while (re-search-forward "^ +[0-9]+:00\\.\\{6\\} ----------------\n" now-pos t)
+        (replace-match "")
+        (setq now-pos (- now-pos (- (match-end 0) (match-beginning 0))))))
+    (goto-char (point-min))
+    (while (re-search-forward "\n\\{3,\\}" nil t)
+      (replace-match "\n\n")))
+  (goto-char (point-min)))
 
 (defun jt/open-daily-on-new-frame (frame)
   "Open today's org-roam daily in new emacsclient frames."
@@ -947,6 +1112,26 @@ Import events from Google Calendar by copying text from the web agenda view.
                        (jt/gcal-clean-from-time (match-string 1 time-string))
                        to-time)))
       (format "%s-%s" from-time to-time))))
+
+(defun jt/gcal-time-to-minutes (time-str)
+  "Convert time string like '10am' or '6:30pm' to minutes since midnight."
+  (let ((hour 0) (min 0) (pm nil))
+    (when (string-match "\\([0-9]+\\)\\(?::\\([0-9]+\\)\\)?\\([ap]m\\)" time-str)
+      (setq hour (string-to-number (match-string 1 time-str)))
+      (setq min (if (match-string 2 time-str) (string-to-number (match-string 2 time-str)) 0))
+      (setq pm (string= "pm" (match-string 3 time-str)))
+      (when (and pm (< hour 12)) (setq hour (+ hour 12)))
+      (when (and (not pm) (= hour 12)) (setq hour 0)))
+    (+ (* hour 60) min)))
+
+(defun jt/gcal-duration-hours (time-string)
+  "Return duration in hours for TIME-STRING like '10am – 6:30pm'."
+  (when (and time-string (string-match "\\(.*\\) – \\(.*\\)" time-string))
+    (let ((from-str (match-string 1 time-string))
+          (to-str (match-string 2 time-string)))
+      (let ((from (jt/gcal-time-to-minutes from-str))
+            (to (jt/gcal-time-to-minutes to-str)))
+        (/ (- to from) 60.0)))))
 #+end_src
 *** Parser function
 #+begin_src elisp
@@ -974,15 +1159,19 @@ Import events from Google Calendar by copying text from the web agenda view.
          ((string-match "^\\(.*[ap]m\\)$" current-line)
           (setq current-time (match-string 1 current-line)))
          (t
-          (let ((event-name current-line))
-            (when (and current-time current-month current-day)
-              (with-current-buffer org-buffer
-                (insert (format "** %s <%s-%s-%s %s>\n"
-                                event-name
-                                current-year
-                                (jt/gcal-month-to-number current-month)
-                                current-day
-                                (jt/gcal-format-time current-time))))
+          (let ((event-name (string-trim current-line)))
+            (when (and current-time current-month current-day (not (string-empty-p event-name)))
+              (let ((duration (jt/gcal-duration-hours current-time)))
+                (unless (and (string-match-p "XTDB Chat" event-name)
+                             duration
+                             (> duration 6))
+                  (with-current-buffer org-buffer
+                    (insert (format "** %s <%s-%s-%s %s>\n"
+                                    event-name
+                                    current-year
+                                    (jt/gcal-month-to-number current-month)
+                                    current-day
+                                    (jt/gcal-format-time current-time))))))
               (setq current-time nil))))))
       (forward-line))))
 #+end_src
@@ -1017,5 +1206,8 @@ Opens a buffer to paste calendar text, then writes to work-cal.org."
            (message "Wrote %d lines to %s"
                     (count-lines (point-min) (point-max))
                     jt/gcal-output-file))
+         (when-let ((existing (find-buffer-visiting (expand-file-name jt/gcal-output-file))))
+           (with-current-buffer existing
+             (revert-buffer t t)))
          (kill-buffer "*jt/gcal-import-raw*"))))))
 #+end_src
