@@ -396,7 +396,8 @@ However, I disable orderless for Company, because I find it affects performance 
     (make-directory backup-dir t)
     (make-directory dest-dir t)
     (dolist (file (directory-files "~/org" t "\\.org$"))
-      (copy-file file (expand-file-name (file-name-nondirectory file) dest-dir) t))
+      (unless (string-prefix-p ".#" (file-name-nondirectory file))
+        (copy-file file (expand-file-name (file-name-nondirectory file) dest-dir) t)))
     (jt/prune-org-backups backup-dir)))
 
 (defun jt/prune-org-backups (backup-dir)
@@ -554,13 +555,42 @@ However, I disable orderless for Company, because I find it affects performance 
 (defun jt/org-agenda-add-header ()
   "Add keybinding hints to org-agenda header."
   (setq header-line-format
-        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  r: refresh  d: pushback  S: save  C: clear  q: quit")
+        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  .: today  r: refresh  d: pushback  S: save  C: clear  h/w/F: org files  q: quit")
   (setq-local show-trailing-whitespace nil))
 (add-hook 'org-agenda-mode-hook #'jt/org-agenda-add-header)
 
 (setq org-agenda-sticky nil)
-(define-key org-agenda-mode-map (kbd "f") #'org-agenda-later)
-(define-key org-agenda-mode-map (kbd "b") #'org-agenda-earlier)
+
+(defvar jt/org-agenda-day-offset 0
+  "Current day offset for agenda navigation.")
+
+(defun jt/org-agenda-forward ()
+  "Move agenda forward by one day, works from anywhere in the buffer."
+  (interactive)
+  (setq jt/org-agenda-day-offset (1+ jt/org-agenda-day-offset))
+  (let ((org-agenda-start-day (format "+%dd" jt/org-agenda-day-offset)))
+    (org-agenda nil "g")))
+
+(defun jt/org-agenda-backward ()
+  "Move agenda backward by one day, works from anywhere in the buffer."
+  (interactive)
+  (setq jt/org-agenda-day-offset (1- jt/org-agenda-day-offset))
+  (let ((org-agenda-start-day (format "%+dd" jt/org-agenda-day-offset)))
+    (org-agenda nil "g")))
+
+(defun jt/org-agenda-today ()
+  "Jump to today in agenda, works from anywhere in the buffer."
+  (interactive)
+  (setq jt/org-agenda-day-offset 0)
+  (org-agenda nil "g"))
+
+(with-eval-after-load 'org-agenda
+  (define-key org-agenda-mode-map (kbd "f") #'jt/org-agenda-forward)
+  (define-key org-agenda-mode-map (kbd "b") #'jt/org-agenda-backward)
+  (define-key org-agenda-mode-map (kbd ".") #'jt/org-agenda-today)
+  (define-key org-agenda-mode-map (kbd "h") (lambda () (interactive) (find-file "~/org/home.org")))
+  (define-key org-agenda-mode-map (kbd "w") (lambda () (interactive) (find-file "~/org/work.org")))
+  (define-key org-agenda-mode-map (kbd "F") (lambda () (interactive) (find-file "~/org/fun.org"))))
 
 (defvar jt/org-agenda-pending-pushbacks nil
   "List of (marker . days) for pending pushbacks.")
