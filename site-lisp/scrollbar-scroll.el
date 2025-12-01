@@ -33,8 +33,8 @@
 (defvar scrollbar-scroll--hl-line-was-on nil
   "Whether hl-line was on before scrolling.")
 
-(defvar scrollbar-scroll--cursor-was-on nil
-  "Whether cursor was visible before scrolling.")
+(defvar scrollbar-scroll--cursor-restore-timer nil
+  "Timer to restore cursor after scrolling.")
 
 (defun scrollbar-scroll--do-scroll (window delta)
   "Scroll WINDOW by DELTA pixels, with throttling.
@@ -50,10 +50,14 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
     ;; Hide cursor and hl-line during scroll for performance
     (unless scrollbar-scroll--point-before-scroll
       (setq scrollbar-scroll--hl-line-was-on (bound-and-true-p global-hl-line-mode))
-      (setq scrollbar-scroll--cursor-was-on cursor-type)
       (when scrollbar-scroll--hl-line-was-on
         (global-hl-line-mode -1))
       (setq cursor-type nil))
+    ;; Schedule cursor restore (cancelled and rescheduled on each scroll event)
+    (when scrollbar-scroll--cursor-restore-timer
+      (cancel-timer scrollbar-scroll--cursor-restore-timer))
+    (setq scrollbar-scroll--cursor-restore-timer
+          (run-at-time 0.1 nil (lambda () (setq cursor-type 'box))))
     ;; Accumulate delta
     (setq scrollbar-scroll--accumulated-delta
           (+ scrollbar-scroll--accumulated-delta delta))
@@ -109,13 +113,10 @@ Uses the same technique as scroll-bar-drag for smooth scrolling."
   (setq scrollbar-scroll--end-scroll-timer nil)
   (setq scrollbar-scroll--point-before-scroll nil)
   (setq scrollbar-scroll--scroll-window nil)
-  ;; Restore cursor and hl-line
+  ;; Restore hl-line
   (when scrollbar-scroll--hl-line-was-on
-    (global-hl-line-mode 1))
-  (when scrollbar-scroll--cursor-was-on
-    (setq cursor-type scrollbar-scroll--cursor-was-on))
-  (setq scrollbar-scroll--hl-line-was-on nil)
-  (setq scrollbar-scroll--cursor-was-on nil))
+    (global-hl-line-mode 1)
+    (setq scrollbar-scroll--hl-line-was-on nil)))
 
 (defun scrollbar-scroll--handler (event)
   "Handle scroll EVENT by jumping to buffer position like scrollbar drag."
