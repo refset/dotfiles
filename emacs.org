@@ -437,7 +437,7 @@ However, I disable orderless for Company, because I find it affects performance 
         ("wd" "Work Deadline" entry (file+headline "~/org/work.org" "Unsorted")
          (file "~/org/templates/work-deadline.org"))
         ("wn" "Work Next Task" entry (file+headline "~/org/work.org" "Unsorted")
-         "** NEXT %?\nDEADLINE: %t")
+         "** NEXT %?\nSCHEDULED: %t")
         ("h" "Home")
         ("ht" "Home TODO" entry (file+headline "~/org/home.org" "Unsorted")
          (file "~/org/templates/todo.org"))
@@ -864,6 +864,7 @@ Allows emojis to easily be inserted from a completion menu.
 (defun jt/--open-daily-delayed ()
   (when (and jt/--pending-daily-frame (frame-live-p jt/--pending-daily-frame))
     (with-selected-frame jt/--pending-daily-frame
+      (setq jt/org-agenda-day-offset 0)
       (org-roam-dailies-goto-today)
       (split-window-below nil)
       (other-window 1)
