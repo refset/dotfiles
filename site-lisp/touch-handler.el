@@ -47,9 +47,24 @@
 (defvar touchscreen--cursor-was-on nil
   "Whether cursor was visible before scrolling.")
 
+(defvar touchscreen--saved-window-start nil
+  "Saved window-start to restore between events.")
+
+(defvar touchscreen--saved-vscroll nil
+  "Saved vscroll to restore between events.")
+
+(defvar touchscreen--clear-saved-timer nil
+  "Timer to clear saved scroll position after delay.")
+
 (defun touchscreen-time ()
   "Time in seconds."
   (float-time))
+
+(defun touchscreen--clear-saved-position ()
+  "Clear the saved scroll position."
+  (setq touchscreen--saved-window-start nil)
+  (setq touchscreen--saved-vscroll nil)
+  (setq touchscreen--clear-saved-timer nil))
 
 (defun touchscreen--restore-display ()
   "Restore cursor and hl-line after scrolling."
@@ -58,13 +73,19 @@
     (setq touchscreen--hl-line-was-on nil))
   (when touchscreen--cursor-was-on
     (setq cursor-type touchscreen--cursor-was-on)
-    (setq touchscreen--cursor-was-on nil)))
+    (setq touchscreen--cursor-was-on nil))
+  ;; Clear saved scroll position after a delay to allow consecutive touches
+  (when touchscreen--clear-saved-timer
+    (cancel-timer touchscreen--clear-saved-timer))
+  (setq touchscreen--clear-saved-timer
+        (run-at-time 0.5 nil #'touchscreen--clear-saved-position)))
 
 (defun touchscreen-momentum-tick ()
   "Apply momentum scrolling with pixel precision."
   (when (> (abs touchscreen-momentum) 1.0)
     (let* ((win touchscreen-scroll-window)
-           (current-vscroll (window-vscroll win t))
+           ;; Use saved position, not window state
+           (current-vscroll (or touchscreen--saved-vscroll (window-vscroll win t)))
            (new-vscroll (+ current-vscroll touchscreen-momentum)))
       (with-current-buffer (window-buffer win)
         (let* ((line-height (line-pixel-height))
@@ -75,7 +96,7 @@
                             (goto-char (point-max))
                             (forward-line (- scroll-limit))
                             (point)))
-               (current-start (window-start win))
+               (current-start (or touchscreen--saved-window-start (window-start win)))
                (hit-boundary nil))
           ;; Handle scrolling down (positive vscroll)
           (while (>= new-vscroll line-height)
@@ -105,7 +126,7 @@
           ;; Move point to center (using pixels for zoom accuracy)
           (let* ((win-pixel-height (window-body-height win t))
                  (half-pixels (/ win-pixel-height 2))
-                 (lines-to-center (/ half-pixels line-height))
+                 (lines-to-center (truncate (/ half-pixels line-height)))
                  (target-point (save-excursion
                                  (goto-char current-start)
                                  (forward-line lines-to-center)
@@ -114,6 +135,9 @@
               (goto-char target-point)))
           (set-window-start win current-start t)
           (set-window-vscroll win new-vscroll t)
+          ;; Update saved position for next tick or next touch
+          (setq touchscreen--saved-window-start current-start)
+          (setq touchscreen--saved-vscroll new-vscroll)
           ;; Stop momentum if we hit a boundary
           (when hit-boundary
             (setq touchscreen-momentum 0)))))
@@ -135,6 +159,10 @@
     (when touchscreen-momentum-timer
       (cancel-timer touchscreen-momentum-timer)
       (setq touchscreen-momentum-timer nil))
+    ;; Cancel any pending clear of saved position
+    (when touchscreen--clear-saved-timer
+      (cancel-timer touchscreen--clear-saved-timer)
+      (setq touchscreen--clear-saved-timer nil))
     (setq touchscreen-momentum 0.0)
     (setq touchscreen-last-velocity 0.0)
     ;; Keep the saved display state if we're interrupting a scroll
@@ -145,7 +173,15 @@
     (setq touchscreen-last-time (touchscreen-time))
     (setq touchscreen-last-pos-pixel pos-pixel)
     (setq touchscreen-begin-char pos-char)
-    (setq touchscreen-did-scroll nil)))
+    (setq touchscreen-did-scroll nil)
+    ;; If we have a saved scroll position, restore it (Emacs may have auto-scrolled)
+    ;; Otherwise initialize from current window state
+    (if (and touchscreen--saved-window-start touchscreen--saved-vscroll)
+        (progn
+          (set-window-start win touchscreen--saved-window-start t)
+          (set-window-vscroll win touchscreen--saved-vscroll t))
+      (setq touchscreen--saved-window-start (window-start win))
+      (setq touchscreen--saved-vscroll (window-vscroll win t)))))
 
 (defun touchscreen-handle-touch-update (input)
   "Handle touch update at input INPUT."
@@ -175,20 +211,19 @@
           (goto-char pos-char))
       (when (> diff-char 1)
         ;; scroll 1:1 with finger movement using pixel-level vscroll
-        ;; Hide cursor and hl-line during scroll for performance (only if not already hidden)
+        ;; Hide cursor and hl-line during scroll for performance
         (unless (or touchscreen-did-scroll touchscreen--cursor-was-on touchscreen--hl-line-was-on)
           (setq touchscreen--hl-line-was-on (bound-and-true-p global-hl-line-mode))
           (setq touchscreen--cursor-was-on cursor-type)
           (when touchscreen--hl-line-was-on
             (global-hl-line-mode -1))
           (setq cursor-type nil))
-        ;; clamp diff to avoid jumps when finger leaves window
+        ;; Use SAVED scroll position (not window state which Emacs may have changed)
         (let* ((max-diff 100)
-               (raw-diff-pixel diff-pixel)
-               (diff-pixel (max (- max-diff) (min max-diff diff-pixel)))
+               (clamped-diff (max (- max-diff) (min max-diff diff-pixel)))
                (win touchscreen-scroll-window)
-               (current-vscroll (window-vscroll win t))
-               (new-vscroll (+ current-vscroll diff-pixel)))
+               (current-vscroll touchscreen--saved-vscroll)
+               (new-vscroll (+ current-vscroll clamped-diff)))
           (with-current-buffer (window-buffer win)
             (let* ((line-height (line-pixel-height))
                    (win-height (window-body-height win))
@@ -198,7 +233,7 @@
                                 (goto-char (point-max))
                                 (forward-line (- scroll-limit))
                                 (point)))
-                   (current-start (window-start win)))
+                   (current-start touchscreen--saved-window-start))
               ;; Handle scrolling down (positive vscroll)
               (while (>= new-vscroll line-height)
                 (let ((next-start (save-excursion
@@ -220,22 +255,25 @@
                       (setq new-vscroll 0)  ; hit top
                     (setq current-start prev-start)
                     (setq new-vscroll (+ new-vscroll line-height)))))
-              ;; Move point to center of visible area (using pixels for zoom accuracy)
-              (let* ((win-pixel-height (window-body-height win t))
-                     (half-pixels (/ win-pixel-height 2))
-                     (lines-to-center (/ half-pixels line-height))
-                     (target-point (save-excursion
-                                     (goto-char current-start)
-                                     (forward-line lines-to-center)
-                                     (point))))
-                (with-selected-window win
-                  (goto-char target-point)))
+              ;; Set window position and save for next event
               (set-window-start win current-start t)
               (set-window-vscroll win new-vscroll t)
-              (setq touchscreen-did-scroll t)))
-          (setq touchscreen-last-velocity (float raw-diff-pixel))
-          (setq touchscreen-last-time (touchscreen-time))
-          (setq touchscreen-last-pos-pixel pos-pixel))))))
+              (setq touchscreen--saved-window-start current-start)
+              (setq touchscreen--saved-vscroll new-vscroll)
+              ;; Move point to visible area to prevent Emacs from auto-scrolling
+              (let* ((win-pixel-height (window-body-height win t))
+                     (visible-center (/ win-pixel-height 2))
+                     (lines-from-start (truncate (/ (+ new-vscroll visible-center) line-height)))
+                     (target-point (save-excursion
+                                     (goto-char current-start)
+                                     (forward-line lines-from-start)
+                                     (point))))
+                (with-selected-window win
+                  (goto-char target-point)))))
+          (setq touchscreen-last-velocity (float diff-pixel)))
+        (setq touchscreen-did-scroll t)
+        (setq touchscreen-last-time (touchscreen-time))
+        (setq touchscreen-last-pos-pixel pos-pixel)))))
 
 (defun touchscreen-handle-touch-end (input)
   "Handle touch end at input INPUT."
@@ -251,7 +289,7 @@
                     (run-at-time 0.016 0.016 #'touchscreen-momentum-tick)))
           ;; no momentum, restore display now
           (touchscreen--restore-display))
-      ;; tap - restore display if we hid it, then move cursor
+      ;; tap - restore display (clears saved position), move cursor
       (touchscreen--restore-display)
       (goto-char pos-char))))
 
