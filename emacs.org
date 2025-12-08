@@ -1089,6 +1089,22 @@ When Inkscape closes, refresh inline images."
 (setq whitespace-style '(face tabs))
 (whitespace-mode)
 #+end_src
+** Claude Code IDE
+Integration with Claude Code CLI via MCP protocol.
+#+begin_src elisp
+;; @jt-menu AI | a c | Claude Code | claude-code-ide
+;; @jt-menu AI | a m | Claude Menu | claude-code-ide-menu
+;; @jt-menu AI | a s | Claude Sessions | claude-code-ide-list-sessions
+(use-package eat :ensure t)
+(use-package claude-code-ide
+  :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
+  :after eat
+  :custom
+  (claude-code-ide-terminal-backend 'eat)
+  :bind ("C-c C-'" . claude-code-ide-menu)
+  :config
+  (claude-code-ide-emacs-tools-setup))
+#+end_src
 ** Personal menu
 Load at the end to avoid scanning partially-loaded org files.
 #+begin_src elisp
