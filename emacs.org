@@ -859,19 +859,17 @@ Allows emojis to easily be inserted from a completion menu.
 
 (add-hook 'org-roam-dailies-find-file-hook #'end-of-buffer)
 
-(defvar jt/--pending-daily-frame nil)
-
-(defun jt/--open-daily-delayed ()
-  (when (and jt/--pending-daily-frame (frame-live-p jt/--pending-daily-frame))
-    (with-selected-frame jt/--pending-daily-frame
-      (setq jt/org-agenda-day-offset 0)
-      (org-roam-dailies-goto-today)
-      (split-window-below nil)
-      (other-window 1)
-      (org-agenda nil "g")
-      (jt/agenda-collapse-empty-lines)
-      (balance-windows)))
-  (setq jt/--pending-daily-frame nil))
+(defun jt/--open-daily ()
+  "Open today's org-roam daily and agenda in new emacsclient frames.
+Only runs when the frame would show *scratch* (no file argument)."
+  (when (string= (buffer-name) "*scratch*")
+    (setq jt/org-agenda-day-offset 0)
+    (org-roam-dailies-goto-today)
+    (split-window-below nil)
+    (other-window 1)
+    (org-agenda nil "g")
+    (jt/agenda-collapse-empty-lines)
+    (balance-windows)))
 
 (defun jt/agenda-collapse-empty-lines ()
   "Remove empty time grid lines above the current time and collapse multiple blank lines."
@@ -890,13 +888,8 @@ Allows emojis to easily be inserted from a completion menu.
       (replace-match "\n\n")))
   (goto-char (point-min)))
 
-(defun jt/open-daily-on-new-frame (frame)
-  "Open today's org-roam daily in new emacsclient frames."
-  (when (daemonp)
-    (setq jt/--pending-daily-frame frame)
-    (run-at-time 0.1 nil #'jt/--open-daily-delayed)))
-
-(add-hook 'after-make-frame-functions #'jt/open-daily-on-new-frame)
+(when (daemonp)
+  (add-hook 'server-after-make-frame-hook #'jt/--open-daily))
 #+end_src
 ** Org-Inkscape
 #+begin_src elisp
