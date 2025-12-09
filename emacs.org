@@ -1101,6 +1101,36 @@ Integration with Claude Code CLI via MCP protocol.
 ;; @jt-menu AI | a m | Claude Menu | claude-code-ide-menu
 ;; @jt-menu AI | a s | Claude Sessions | claude-code-ide-list-sessions
 (use-package eat :ensure t)
+
+;; @jt-menu AI | a u | Copy visible with URLs | jt/copy-visible-with-unwrapped-urls
+(defun jt/copy-visible-with-unwrapped-urls ()
+  "Copy visible buffer contents to scratch buffer with URLs unwrapped.
+Grabs a few extra lines beyond visible area to compensate for minibuffer."
+  (interactive)
+  (let* ((start (window-start))
+         (end (save-excursion
+                (goto-char (window-end nil t))
+                (forward-line 10)
+                (point)))
+         (content (buffer-substring-no-properties start (min end (point-max))))
+         (buf (generate-new-buffer "*scratch-urls*")))
+    (with-current-buffer buf
+      (insert content)
+      (goto-char (point-min))
+      (let ((found t))
+        (while found
+          (setq found nil)
+          (goto-char (point-min))
+          (while (re-search-forward "\\(https?://[^ \t\n]*\\)\n\\([^ \t\n]+\\)" nil t)
+            (let ((before (match-string 1))
+                  (after (match-string 2)))
+              (when (and (not (string-match-p "^https?://" after))
+                         (string-match-p "^[a-zA-Z0-9/_?.=&%-]" after))
+                (replace-match (concat before after) t t)
+                (setq found t))))))
+      (goto-address-mode 1)
+      (goto-char (point-min)))
+    (switch-to-buffer-other-window buf)))
 (use-package claude-code-ide
   :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
   :after eat
