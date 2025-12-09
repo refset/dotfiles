@@ -148,6 +148,18 @@
 ** trailing whitespace
 #+begin_src elisp
 (setq-default show-trailing-whitespace t)
+
+(defvar jt/no-whitespace-modes '(eat-mode)
+  "Modes where whitespace display should be disabled.")
+
+(defun jt/disable-whitespace-display ()
+  "Disable whitespace display for terminal and special buffers."
+  (when (or (apply #'derived-mode-p jt/no-whitespace-modes)
+            (string-prefix-p "*claude-code" (buffer-name)))
+    (setq-local show-trailing-whitespace nil)
+    (whitespace-mode -1)))
+
+(add-hook 'after-change-major-mode-hook #'jt/disable-whitespace-display)
 #+end_src
 
 ** Ivy
@@ -1228,7 +1240,7 @@ Opens a buffer to paste calendar text, then writes to work-cal.org."
   (let ((raw-buffer (get-buffer-create "*jt/gcal-import-raw*")))
     (switch-to-buffer raw-buffer)
     (erase-buffer)
-    (browse-url "https://calendar.google.com/calendar/u/0/r/agenda")
+    (browse-url "https://calendar.google.com/calendar/u/1/r/agenda")
     (insert "Paste Google Calendar agenda text here, then press C-c C-c\n")
     (insert "------------------------------------------------------\n\n")
     (local-set-key
@@ -1251,3 +1263,6 @@ Opens a buffer to paste calendar text, then writes to work-cal.org."
              (revert-buffer t t)))
          (kill-buffer "*jt/gcal-import-raw*"))))))
 #+end_src
+
+#+RESULTS:
+: jt/gcal-import
