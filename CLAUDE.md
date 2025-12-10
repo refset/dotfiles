@@ -10,6 +10,10 @@ also feel free to test changes via `emacsclient -e ...` if it makes sense to
 restart the daemon with:
 `systemctl --user restart emacs`
 
+if emacs is frozen/pegged at 100% CPU and emacsclient hangs, try:
+`kill -SIGUSR2 <pid>` (get pid from `pgrep -f 'emacs --daemon'`)
+this can unfreeze it by interrupting whatever loop it's stuck in
+
 the jt-menu system is intended to help discover and remember commands that we collaborate on, please add to it using the annotations per the examples in emacs.org
 
 when we're debugging something that requires you to add `(message ...` entries and then ask me to repro something - just read from the *Messages* buffer yourself by adding an entry beforehand so you can find exactly the right lines when I respond to you with "done [...]" e.g. doing `emacsclient -e '(with-current-buffer "*Messages*" (buffer-substring-no-properties (max (point-min) (- (point-max) 5000))       timeout: 

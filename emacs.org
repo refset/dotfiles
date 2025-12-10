@@ -1111,6 +1111,108 @@ Integration with Claude Code CLI via MCP protocol.
 ;; @jt-menu AI | a s | Claude Sessions | claude-code-ide-list-sessions
 (use-package eat :ensure t)
 
+(defvar jt/eat-sanitize-ansi t
+  "When non-nil, sanitize problematic ANSI sequences in eat buffers.")
+
+(defun jt/eat-sanitize-output (output)
+  "Remove problematic ANSI escape sequences and binary garbage from OUTPUT.
+Filters sequences that can cause scroll-to-top or other display disruption
+when binary content is accidentally rendered (e.g., from Claude Code reading
+PDFs/zips that contain embedded escape sequences).
+Also strips runs of binary data that can cause eat to spin at 100% CPU."
+  (if (not jt/eat-sanitize-ansi)
+      output
+    (let ((result output))
+      ;; Strip runs of non-printable binary (excluding normal control chars
+      ;; like newline, carriage return, tab, and ANSI escape)
+      ;; This catches ZIP/JAR/PDF binary content that can cause eat to hang
+      (setq result (replace-regexp-in-string
+                    "\\(?:[^\x09\x0a\x0d\x1b\x20-\x7e]\\{20,\\}\\)"
+                    "[binary]"
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\e\\[3J" ""
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\e\\[2J" ""
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\e\\[H" ""
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\e\\[;H" ""
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\e\\[[0-9]*;[0-9]*H" ""
+                    result t t))
+      (setq result (replace-regexp-in-string
+                    "\ec" ""
+                    result t t))
+      result)))
+
+(defun jt/eat--filter-advice (orig-fun process output)
+  "Advice to sanitize OUTPUT before passing to eat filter."
+  (funcall orig-fun process (jt/eat-sanitize-output output)))
+
+(defvar jt/eat-disable-scroll-sync nil
+  "When non-nil, completely disable eat's scroll synchronization.
+This is more aggressive than claude-code-ide-eat-preserve-position.")
+
+(with-eval-after-load 'eat
+  (advice-add 'eat--filter :around #'jt/eat--filter-advice))
+
+(defun jt/eat-dumb-scroll-buffer-p ()
+  "Return non-nil if current buffer should have dumb scroll mode."
+  (let ((name (buffer-name)))
+    (or (string-prefix-p "*claude" name)
+        (string-prefix-p "*Claude" name)
+        (string-prefix-p "*eat" name))))
+
+(defun jt/eat-dumb-scroll-mode ()
+  "Make eat completely ignore scroll synchronization in Claude/eat buffers.
+Call this if you're still experiencing scroll jumps."
+  (interactive)
+  (setq jt/eat-disable-scroll-sync t)
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (and (jt/eat-dumb-scroll-buffer-p)
+                 (boundp 'eat--synchronize-scroll-function))
+        (setq-local eat--synchronize-scroll-function #'ignore))))
+  (message "Eat scroll sync disabled for Claude/eat buffers"))
+
+(add-hook 'eat-mode-hook
+          (lambda ()
+            (when (and jt/eat-disable-scroll-sync
+                       (jt/eat-dumb-scroll-buffer-p))
+              (setq-local eat--synchronize-scroll-function #'ignore))))
+
+(defvar-local jt/eat-auto-scroll-timer nil
+  "Timer for auto-scrolling in eat buffers.")
+
+(define-minor-mode jt/eat-auto-scroll-mode
+  "Minor mode that scrolls to bottom every 5 seconds in eat buffers."
+  :lighter " AutoScroll"
+  (if jt/eat-auto-scroll-mode
+      (setq jt/eat-auto-scroll-timer
+            (run-with-timer 5 5
+                            (lambda (buf)
+                              (when (buffer-live-p buf)
+                                (with-current-buffer buf
+                                  (when jt/eat-auto-scroll-mode
+                                    (dolist (win (get-buffer-window-list buf nil t))
+                                      (with-selected-window win
+                                        (goto-char (point-max))
+                                        (recenter -1)))))))
+                            (current-buffer)))
+    (when jt/eat-auto-scroll-timer
+      (cancel-timer jt/eat-auto-scroll-timer)
+      (setq jt/eat-auto-scroll-timer nil))))
+
+(add-hook 'eat-mode-hook
+          (lambda ()
+            (when (jt/eat-dumb-scroll-buffer-p)
+              (jt/eat-auto-scroll-mode 1))))
+
 ;; @jt-menu AI | a u | Copy visible with URLs | jt/copy-visible-with-unwrapped-urls
 (defun jt/copy-visible-with-unwrapped-urls ()
   "Copy visible buffer contents to scratch buffer with URLs unwrapped.
