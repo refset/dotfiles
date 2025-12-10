@@ -138,6 +138,15 @@
     (setq calendar-longitude 0.00)
     (use-package theme-changer
       :ensure t)
+
+    (defun jt/theme-changer-cleanup (_theme)
+      "Ensure only one theme is enabled after theme change."
+      (when (> (length custom-enabled-themes) 1)
+        (dolist (theme (cdr custom-enabled-themes))
+          (disable-theme theme))))
+
+    (add-hook 'theme-changer-post-change-hook #'jt/theme-changer-cleanup)
+
     (change-theme 'spacemacs-light 'spacemacs-dark)
     (when (daemonp)
       (add-hook 'server-after-make-frame-hook
