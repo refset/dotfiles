@@ -576,7 +576,7 @@ However, I disable orderless for Company, because I find it affects performance 
 (defun jt/org-agenda-add-header ()
   "Add keybinding hints to org-agenda header."
   (setq header-line-format
-        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  .: today  r: refresh  d: pushback  S: save  C: clear  h/w/F: org files  q: quit")
+        "  n/p: next/prev  t: TODO  RET: goto  f/b: fwd/back  .: today  r: refresh  d: pushback  S: save  C: clear  G: gcal  h/w/F: org files  q: quit")
   (setq-local show-trailing-whitespace nil))
 (add-hook 'org-agenda-mode-hook #'jt/org-agenda-add-header)
 
@@ -611,7 +611,8 @@ However, I disable orderless for Company, because I find it affects performance 
   (define-key org-agenda-mode-map (kbd ".") #'jt/org-agenda-today)
   (define-key org-agenda-mode-map (kbd "h") (lambda () (interactive) (find-file "~/org/home.org")))
   (define-key org-agenda-mode-map (kbd "w") (lambda () (interactive) (find-file "~/org/work.org")))
-  (define-key org-agenda-mode-map (kbd "F") (lambda () (interactive) (find-file "~/org/fun.org"))))
+  (define-key org-agenda-mode-map (kbd "F") (lambda () (interactive) (find-file "~/org/fun.org")))
+  (define-key org-agenda-mode-map (kbd "G") #'jt/gcal-import))
 
 (defvar jt/org-agenda-pending-pushbacks nil
   "List of (marker . days) for pending pushbacks.")
@@ -775,6 +776,109 @@ This function was taken from [[https://emacs.stackexchange.com/questions/3981/ho
 
 (define-key org-mode-map (kbd "C-x C-l") 'farynaio/org-link-copy)
 #+end_src
+*** Org link display
+#+begin_src elisp
+;; @jt-menu View | l | Toggle link display | org-toggle-link-display
+(define-key org-mode-map (kbd "C-c C-M-l") 'org-toggle-link-display)
+#+end_src
+*** Refresh link title from URL
+#+begin_src elisp
+;; @jt-menu Edit | r | Refresh link title | jt/org-link-refresh-title
+(defun jt/org-link-refresh-title ()
+  "Fetch the current page title from the URL at point and update the link."
+  (interactive)
+  (let* ((context (org-element-context))
+         (type (org-element-type context)))
+    (unless (eq type 'link)
+      (user-error "Not on a link"))
+    (let* ((link-type (org-element-property :type context))
+           (path (org-element-property :path context))
+           (url (if (member link-type '("http" "https"))
+                    (concat link-type ":" path)
+                  (user-error "Not an HTTP(S) link")))
+           (begin (org-element-property :begin context))
+           (end (org-element-property :end context))
+           (trailing-space (when (save-excursion
+                                   (goto-char (1- end))
+                                   (looking-at-p " "))
+                             " ")))
+      (message "Fetching title from %s..." url)
+      (let ((title (jt/fetch-url-title url)))
+        (if title
+            (progn
+              (setq title (replace-regexp-in-string "\\[\\|\\]" "" title))
+              (delete-region begin end)
+              (insert (format "[[%s][%s]]%s" url title (or trailing-space "")))
+              (message "Updated title: %s" title))
+          (message "Could not fetch title"))))))
+
+(defun jt/fetch-url-title (url)
+  "Fetch URL and extract the <title> tag contents."
+  (with-temp-buffer
+    (condition-case err
+        (progn
+          (call-process "curl" nil t nil "-sL" "-m" "10"
+                        "-H" "User-Agent: Mozilla/5.0" url)
+          (goto-char (point-min))
+          (when (re-search-forward "<title[^>]*>\\([^<]+\\)</title>" nil t)
+            (string-trim (match-string 1))))
+      (error
+       (message "Error fetching URL: %s" err)
+       nil))))
+
+(define-key org-mode-map (kbd "C-c r") 'jt/org-link-refresh-title)
+
+;; @jt-menu Edit | R | Refresh links by domain | jt/org-links-refresh-by-domain
+(defun jt/org-links-refresh-by-domain (domain)
+  "Refresh titles for all links matching DOMAIN in current buffer.
+Pauses 2 seconds between requests to avoid overloading servers."
+  (interactive "sRefresh links matching domain: ")
+  (let ((links '())
+        (processed 0)
+        (failed 0))
+    (org-element-map (org-element-parse-buffer) 'link
+      (lambda (link)
+        (let* ((type (org-element-property :type link))
+               (path (org-element-property :path link)))
+          (when (and (member type '("http" "https"))
+                     (string-match-p (regexp-quote domain) path))
+            (push (list :begin (org-element-property :begin link)
+                        :end (org-element-property :end link)
+                        :url (concat type ":" path))
+                  links)))))
+    (setq links (nreverse links))
+    (if (null links)
+        (message "No links matching '%s' found" domain)
+      (message "Found %d links matching '%s'" (length links) domain)
+      (dolist (link links)
+        (let* ((url (plist-get link :url))
+               (title (jt/fetch-url-title url)))
+          (cl-incf processed)
+          (if title
+              (progn
+                (setq title (replace-regexp-in-string "\\[\\|\\]" "" title))
+                (save-excursion
+                  (goto-char (point-min))
+                  (when (search-forward url nil t)
+                    (let ((context (org-element-context)))
+                      (when (eq (org-element-type context) 'link)
+                        (let ((begin (org-element-property :begin context))
+                              (end (org-element-property :end context)))
+                          (delete-region begin end)
+                          (goto-char begin)
+                          (insert (format "[[%s][%s]]" url title)))))))
+                (message "[%d/%d] Updated: %s"
+                         processed (length links)
+                         (truncate-string-to-width title 50 nil nil "…")))
+            (cl-incf failed)
+            (message "[%d/%d] Failed: %s" processed (length links) url))
+          (when (< processed (length links))
+            (sleep-for 2))))
+      (message "Done. Updated %d/%d links (%d failed)"
+               (- processed failed) (length links) failed))))
+
+(define-key org-mode-map (kbd "C-c M-r") 'jt/org-links-refresh-by-domain)
+#+end_src
 ** Which key
 #+begin_src elisp
 (use-package which-key :ensure t)
@@ -847,7 +951,7 @@ Allows emojis to easily be inserted from a completion menu.
 (global-set-key (kbd "M-j") #'join-line)
 ;; @jt-menu View | v | Visual line mode | visual-line-mode
 (global-set-key (kbd "C-x V") #'visual-line-mode)
-;; @jt-menu View | l | Line numbers | display-line-numbers-mode
+;; @jt-menu View | # | Line numbers | display-line-numbers-mode
 ;; @jt-menu Tools | t u | Browse URL at point | browse-url-at-point
 (global-set-key (kbd "M-q") #'browse-url-at-point)
 ;; [[https://google.com/][asdf]]
@@ -1082,12 +1186,170 @@ When Inkscape closes, refresh inline images."
                               (buffer-name)
                               (time-since-last-modified))))
 #+end_src
+** Countdown timer
+#+begin_src elisp
+;; @jt-menu Tools | t c | Countdown timer | jt/countdown-timer
+(defvar jt/countdown-timer nil
+  "Timer object for the countdown.")
+
+(defvar jt/countdown-remaining 0
+  "Remaining seconds in countdown.")
+
+(defvar jt/countdown-buffer-name "*Countdown*"
+  "Name of the countdown buffer.")
+
+(defvar jt/countdown-start-time nil
+  "Time when countdown was started.")
+
+(defvar jt/countdown-minutes nil
+  "Number of minutes for the countdown.")
+
+(defun jt/countdown-update ()
+  "Update the countdown display."
+  (when (> jt/countdown-remaining 0)
+    (setq jt/countdown-remaining (1- jt/countdown-remaining))
+    (let ((buf (get-buffer jt/countdown-buffer-name)))
+      (when buf
+        (with-current-buffer buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (jt/countdown-insert-display))))))
+  (when (<= jt/countdown-remaining 0)
+    (jt/countdown-finished)))
+
+(defun jt/countdown-insert-display ()
+  "Insert the countdown display into current buffer."
+  (let* ((mins (/ jt/countdown-remaining 60))
+         (secs (mod jt/countdown-remaining 60))
+         (time-str (format "%d:%02d" mins secs)))
+    (insert (propertize time-str
+                        'face '(:height 4.0 :weight bold)))
+    (insert "\n\n")
+    (insert (propertize (format "%dm \@ %s\n" jt/countdown-minutes jt/countdown-start-time)
+                        'face '(:height 1.0 :foreground "gray50")))
+    (insert (propertize "Press 'q' to cancel"
+                        'face '(:height 1.0 :foreground "gray50")))))
+
+(defun jt/countdown-finished ()
+  "Handle countdown completion."
+  (when jt/countdown-timer
+    (cancel-timer jt/countdown-timer)
+    (setq jt/countdown-timer nil))
+  (let ((buf (get-buffer jt/countdown-buffer-name)))
+    (when buf
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "TIME!"
+                              'face '(:height 4.0 :weight bold :foreground "red")))
+          (insert "\n\n")
+          (insert (propertize "Press 'q' to close"
+                              'face '(:height 1.0 :foreground "gray50")))))))
+  (start-process "countdown-bell" nil "paplay" "/usr/share/sounds/freedesktop/stereo/complete.oga"))
+
+(defun jt/countdown-quit ()
+  "Cancel countdown and close frame."
+  (interactive)
+  (when jt/countdown-timer
+    (cancel-timer jt/countdown-timer)
+    (setq jt/countdown-timer nil))
+  (let ((buf (get-buffer jt/countdown-buffer-name)))
+    (when buf
+      (let ((frame (car (seq-filter
+                         (lambda (f)
+                           (eq buf (window-buffer (frame-selected-window f))))
+                         (frame-list)))))
+        (kill-buffer buf)
+        (when (and frame (> (length (frame-list)) 1))
+          (delete-frame frame))))))
+
+(defun jt/countdown-timer (minutes)
+  "Start a countdown timer for MINUTES in a new frame."
+  (interactive "nMinutes: ")
+  (jt/countdown-quit)
+  (setq jt/countdown-start-time (format-time-string "%H:%M"))
+  (setq jt/countdown-minutes minutes)
+  (setq jt/countdown-remaining (* minutes 60))
+  (let* ((frame (make-frame '((name . "Countdown")
+                              (width . 60)
+                              (height . 18))))
+         (buf (get-buffer-create jt/countdown-buffer-name)))
+    (select-frame frame)
+    (switch-to-buffer buf)
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (jt/countdown-insert-display))
+      (setq buffer-read-only t)
+      (local-set-key (kbd "q") #'jt/countdown-quit))
+    (setq jt/countdown-timer
+          (run-with-timer 1 1 #'jt/countdown-update))))
+#+end_src
 ** browser integration
 #+begin_src elisp
 (setq browse-url-generic-program
   (executable-find "chromium")
   browse-url-generic-args '("--new-tab")
   browse-url-browser-function 'browse-url-generic)
+#+end_src
+*** Session Buddy import
+#+begin_src elisp
+;; @jt-menu Tools | t b | Import Session Buddy JSON | jt/import-session-buddy
+(defun jt/import-session-buddy (json-file target-file)
+  "Import Session Buddy JSON export into org checkbox format.
+JSON-FILE is the exported .json file from Session Buddy.
+TARGET-FILE is the org file to append to (e.g. ~/org/fun.org)."
+  (interactive
+   (list (read-file-name "Session Buddy JSON file: " "~/Downloads/" nil t nil
+                         (lambda (f) (or (file-directory-p f)
+                                         (string-suffix-p ".json" f))))
+         (expand-file-name
+          (read-file-name "Target org file: " "~/org/" "fun.org" nil "fun.org"))))
+  (setq target-file (expand-file-name target-file))
+  (let* ((json-object-type 'alist)
+         (json-array-type 'list)
+         (json-key-type 'symbol)
+         (data (json-read-file json-file))
+         (collections (alist-get 'collections data))
+         (total-tabs 0)
+         (output "")
+         (timestamp (format-time-string "[%Y-%m-%d %H:%M]")))
+    (setq output (format "* Browser Import %s [/]\n" timestamp))
+    (let ((window-num 1))
+      (dolist (collection collections)
+        (dolist (folder (alist-get 'folders collection))
+          (let* ((links (alist-get 'links folder))
+                 (last-link (car (last links)))
+                 (window-hint (if last-link
+                                  (truncate-string-to-width
+                                   (or (alist-get 'title last-link)
+                                       (alist-get 'url last-link) "?")
+                                   40 nil nil "…")
+                                "empty"))
+                 (link-count (length links)))
+            (setq output (concat output
+                                 (format "** Window %d: %s [0/%d]\n"
+                                         window-num window-hint link-count)))
+            (dolist (link links)
+              (let ((url (alist-get 'url link))
+                    (title (or (alist-get 'title link) "")))
+                (when url
+                  (setq title (if (string-empty-p title)
+                                  url
+                                (replace-regexp-in-string "\\[\\|\\]" "" title)))
+                  (setq output (concat output
+                                       (format "- [ ] [[%s][%s]]\n" url title)))
+                  (cl-incf total-tabs))))
+            (cl-incf window-num)))))
+    (with-current-buffer (find-file-noselect target-file)
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (insert output)
+      (save-buffer)
+      (org-update-statistics-cookies t))
+    (find-file target-file)
+    (goto-char (point-max))
+    (message "Imported %d tabs into %s" total-tabs target-file)))
 #+end_src
 ** lang stuff
 #+begin_src elisp
@@ -1110,108 +1372,6 @@ Integration with Claude Code CLI via MCP protocol.
 ;; @jt-menu AI | a m | Claude Menu | claude-code-ide-menu
 ;; @jt-menu AI | a s | Claude Sessions | claude-code-ide-list-sessions
 (use-package eat :ensure t)
-
-(defvar jt/eat-sanitize-ansi t
-  "When non-nil, sanitize problematic ANSI sequences in eat buffers.")
-
-(defun jt/eat-sanitize-output (output)
-  "Remove problematic ANSI escape sequences and binary garbage from OUTPUT.
-Filters sequences that can cause scroll-to-top or other display disruption
-when binary content is accidentally rendered (e.g., from Claude Code reading
-PDFs/zips that contain embedded escape sequences).
-Also strips runs of binary data that can cause eat to spin at 100% CPU."
-  (if (not jt/eat-sanitize-ansi)
-      output
-    (let ((result output))
-      ;; Strip runs of non-printable binary (excluding normal control chars
-      ;; like newline, carriage return, tab, and ANSI escape)
-      ;; This catches ZIP/JAR/PDF binary content that can cause eat to hang
-      (setq result (replace-regexp-in-string
-                    "\\(?:[^\x09\x0a\x0d\x1b\x20-\x7e]\\{20,\\}\\)"
-                    "[binary]"
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\e\\[3J" ""
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\e\\[2J" ""
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\e\\[H" ""
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\e\\[;H" ""
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\e\\[[0-9]*;[0-9]*H" ""
-                    result t t))
-      (setq result (replace-regexp-in-string
-                    "\ec" ""
-                    result t t))
-      result)))
-
-(defun jt/eat--filter-advice (orig-fun process output)
-  "Advice to sanitize OUTPUT before passing to eat filter."
-  (funcall orig-fun process (jt/eat-sanitize-output output)))
-
-(defvar jt/eat-disable-scroll-sync nil
-  "When non-nil, completely disable eat's scroll synchronization.
-This is more aggressive than claude-code-ide-eat-preserve-position.")
-
-(with-eval-after-load 'eat
-  (advice-add 'eat--filter :around #'jt/eat--filter-advice))
-
-(defun jt/eat-dumb-scroll-buffer-p ()
-  "Return non-nil if current buffer should have dumb scroll mode."
-  (let ((name (buffer-name)))
-    (or (string-prefix-p "*claude" name)
-        (string-prefix-p "*Claude" name)
-        (string-prefix-p "*eat" name))))
-
-(defun jt/eat-dumb-scroll-mode ()
-  "Make eat completely ignore scroll synchronization in Claude/eat buffers.
-Call this if you're still experiencing scroll jumps."
-  (interactive)
-  (setq jt/eat-disable-scroll-sync t)
-  (dolist (buf (buffer-list))
-    (with-current-buffer buf
-      (when (and (jt/eat-dumb-scroll-buffer-p)
-                 (boundp 'eat--synchronize-scroll-function))
-        (setq-local eat--synchronize-scroll-function #'ignore))))
-  (message "Eat scroll sync disabled for Claude/eat buffers"))
-
-(add-hook 'eat-mode-hook
-          (lambda ()
-            (when (and jt/eat-disable-scroll-sync
-                       (jt/eat-dumb-scroll-buffer-p))
-              (setq-local eat--synchronize-scroll-function #'ignore))))
-
-(defvar-local jt/eat-auto-scroll-timer nil
-  "Timer for auto-scrolling in eat buffers.")
-
-(define-minor-mode jt/eat-auto-scroll-mode
-  "Minor mode that scrolls to bottom every 5 seconds in eat buffers."
-  :lighter " AutoScroll"
-  (if jt/eat-auto-scroll-mode
-      (setq jt/eat-auto-scroll-timer
-            (run-with-timer 5 5
-                            (lambda (buf)
-                              (when (buffer-live-p buf)
-                                (with-current-buffer buf
-                                  (when jt/eat-auto-scroll-mode
-                                    (dolist (win (get-buffer-window-list buf nil t))
-                                      (with-selected-window win
-                                        (goto-char (point-max))
-                                        (recenter -1)))))))
-                            (current-buffer)))
-    (when jt/eat-auto-scroll-timer
-      (cancel-timer jt/eat-auto-scroll-timer)
-      (setq jt/eat-auto-scroll-timer nil))))
-
-(add-hook 'eat-mode-hook
-          (lambda ()
-            (when (jt/eat-dumb-scroll-buffer-p)
-              (jt/eat-auto-scroll-mode 1))))
 
 ;; @jt-menu AI | a u | Copy visible with URLs | jt/copy-visible-with-unwrapped-urls
 (defun jt/copy-visible-with-unwrapped-urls ()
@@ -1355,7 +1515,7 @@ Import events from Google Calendar by copying text from the web agenda view.
           (let ((event-name (string-trim current-line)))
             (when (and current-time current-month current-day (not (string-empty-p event-name)))
               (let ((duration (jt/gcal-duration-hours current-time)))
-                (unless (and (string-match-p "XTDB Chat" event-name)
+                (unless (and (string-equal "XTDB Chat" event-name)
                              duration
                              (> duration 6))
                   (with-current-buffer org-buffer
@@ -1404,6 +1564,5 @@ Opens a buffer to paste calendar text, then writes to work-cal.org."
              (revert-buffer t t)))
          (kill-buffer "*jt/gcal-import-raw*"))))))
 #+end_src
-
-#+RESULTS:
-: jt/gcal-import
+** org wishlist TODO
+see parent org lines at top of the buffer (vscode extension does this with markdown? pretty cool)
