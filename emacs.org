@@ -22,6 +22,8 @@
 
 (global-set-key [next] #'jt/scroll-up-command)
 (global-set-key [prior] #'jt/scroll-down-command)
+
+(setq visible-bell t)
 #+end_src
 
 ** GUI customisation
@@ -146,6 +148,35 @@
           (disable-theme theme))))
 
     (add-hook 'theme-changer-post-change-hook #'jt/theme-changer-cleanup)
+
+    ;; Fix: suppress frame-set-background-mode during theme switch to prevent
+    ;; O(faces² × frames) cascade. Changing the default face's :background
+    ;; triggers frame-set-background-mode which recalculates ALL faces on
+    ;; every frame — before enable-theme even finishes its own iteration.
+    (advice-add 'theme-changer-switch-theme :around
+      (lambda (orig-fn old new)
+        (let ((inhibit-redisplay t))
+          (unwind-protect
+              (progn
+                (advice-add 'frame-set-background-mode :override #'ignore)
+                (funcall orig-fn old new))
+            (advice-remove 'frame-set-background-mode #'ignore)
+            (dolist (frame (frame-list))
+              (frame-set-background-mode frame))))))
+
+    ;; Fix: each change-theme call creates a run-at-time timer. Multiple
+    ;; calls (from server-after-make-frame-hook) accumulate timers that all
+    ;; fire simultaneously after suspend/resume.
+    (defvar jt/theme-changer-timer nil)
+    (advice-add 'change-theme :around
+      (lambda (orig-fn &rest args)
+        (when (timerp jt/theme-changer-timer)
+          (cancel-timer jt/theme-changer-timer))
+        (apply orig-fn args)
+        (setq jt/theme-changer-timer
+              (seq-find (lambda (timer)
+                          (eq (timer--function timer) 'change-theme))
+                        timer-list))))
 
     (change-theme 'spacemacs-light 'spacemacs-dark)
     (when (daemonp)
