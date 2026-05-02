@@ -234,12 +234,47 @@ doesn't perturb other buffers/frames. Launch with:
         (display-line-numbers-mode -1))
       (setq-local display-line-numbers-mode-set-explicitly t)
       (setq-local display-line-numbers nil))
+    ;; Ensure enough lines exist for col/row guides to render visibly.
+    (with-current-buffer buf
+      (when (= (buffer-size) 0)
+        (insert (make-string 30 ?\n))
+        (goto-char (point-min))))
     (unless (get-buffer "*sidekick-dark*")
       ;; Indirect buffer: shares text with *sidekick* (edits propagate
       ;; both ways) but has its own buffer-local settings, so the dark
       ;; twin renders normally.
-      (make-indirect-buffer buf "*sidekick-dark*" nil))
+      (let ((dark (make-indirect-buffer buf "*sidekick-dark*" nil)))
+        (with-current-buffer dark
+          (jt/sidekick-dark-setup-bounds))))
     buf))
+
+(defvar-local jt/sidekick-overflow-ov nil)
+
+(defun jt/sidekick-dark-update-overflow (&rest _)
+  "Underline line 10 in *sidekick-dark* to mark the bottom of the usable area."
+  (when (eq (current-buffer) (get-buffer "*sidekick-dark*"))
+    (let* ((line-10-beg (save-excursion (goto-char (point-min))
+                                        (forward-line 9) (point)))
+           (line-10-end (save-excursion (goto-char line-10-beg)
+                                        (line-end-position))))
+      (unless jt/sidekick-overflow-ov
+        (setq jt/sidekick-overflow-ov (make-overlay 1 1 nil nil t))
+        (overlay-put jt/sidekick-overflow-ov 'face
+                     '(:underline (:color "gray" :position t) :extend t)))
+      (move-overlay jt/sidekick-overflow-ov line-10-beg (1+ line-10-end)))))
+
+(defun jt/sidekick-dark-setup-bounds ()
+  "Mark the usable 28x10 region inside *sidekick-dark* visually."
+  ;; Vertical bar at col 29 (usable cols are 1..28).
+  (setq-local fill-column 28)
+  (setq-local display-fill-column-indicator-character ?│)
+  (face-remap-add-relative 'fill-column-indicator '(:foreground "gray"))
+  (when (fboundp 'display-fill-column-indicator-mode)
+    (display-fill-column-indicator-mode 1))
+  ;; Horizontal overflow tint past line 10.
+  (add-hook 'after-change-functions
+            #'jt/sidekick-dark-update-overflow nil t)
+  (jt/sidekick-dark-update-overflow))
 
 ;; Defensive: if anything turns line numbers back on in *sidekick*, kick it off.
 (add-hook 'display-line-numbers-mode-hook
