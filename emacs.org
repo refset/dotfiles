@@ -234,6 +234,11 @@ doesn't perturb other buffers/frames. Launch with:
         (display-line-numbers-mode -1))
       (setq-local display-line-numbers-mode-set-explicitly t)
       (setq-local display-line-numbers nil))
+    (unless (get-buffer "*sidekick-dark*")
+      ;; Indirect buffer: shares text with *sidekick* (edits propagate
+      ;; both ways) but has its own buffer-local settings, so the dark
+      ;; twin renders normally.
+      (make-indirect-buffer buf "*sidekick-dark*" nil))
     buf))
 
 ;; Defensive: if anything turns line numbers back on in *sidekick*, kick it off.
