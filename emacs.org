@@ -222,7 +222,9 @@ doesn't perturb other buffers/frames. Launch with:
       (unless (bound-and-true-p jt/sidekick-applied)
         (setq-local jt/sidekick-applied t)
         (jt/sidekick-apply-light)
-        (text-scale-set 8)
+        ;; :height 636 yields 28 cols x 10 lines in the SidekickEmacs frame
+        ;; at its current pixel size; next step (637) drops to 9 lines.
+        (face-remap-add-relative 'default :height 636)
         (setq-local mode-line-format nil)
         (setq-local left-fringe-width 0)
         (setq-local right-fringe-width 0))
